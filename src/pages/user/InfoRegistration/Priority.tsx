@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Form, Select, Button, Upload, message, Row, Col, Table, Space, Tag, Modal } from "antd";
-import { UploadOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { UploadOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, EyeOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
 const { confirm } = Modal;
@@ -9,9 +9,9 @@ const { confirm } = Modal;
 interface PriorityInfo {
   id: string; // Thêm ID để dễ dàng quản lý
   khuVucUuTien: string;
-  fileKV?: any; // Lưu ý: thực tế sẽ lưu URL hoặc ID của file
+  fileKV?: string; // Lưu URL của Blob hoặc URL từ server
   doiTuongUuTien: string;
-  fileDT?: any; // Lưu ý: thực tế sẽ lưu URL hoặc ID của file
+  fileDT?: string; // Lưu URL của Blob hoặc URL từ server
   status: "Chờ duyệt" | "Đã duyệt" | "Từ chối";
   reason?: string; // Lý do từ chối
 }
@@ -36,17 +36,21 @@ const LOCAL_STORAGE_KEY = "infoPriorityData";
 
 const InfoPriority: React.FC = () => {
   const [form] = Form.useForm<PriorityInfo>();
-  // State để quản lý danh sách các thông tin ưu tiên đã lưu
   const [priorityRecords, setPriorityRecords] = useState<PriorityInfo[]>([]);
-  // State để xác định xem có đang chỉnh sửa một bản ghi không
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [showDoiTuongUuTienFile, setShowDoiTuongUuTienFile] = useState<boolean>(true);
 
   // Khi component mount, load dữ liệu từ localStorage
   useEffect(() => {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedData) {
-      const parsed: PriorityInfo[] = JSON.parse(savedData);
-      setPriorityRecords(parsed);
+      try {
+        const parsed: PriorityInfo[] = JSON.parse(savedData);
+        setPriorityRecords(parsed);
+      } catch (e) {
+        console.error("Error parsing localStorage data:", e);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
     }
   }, []);
 
@@ -55,47 +59,80 @@ const InfoPriority: React.FC = () => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(priorityRecords));
   }, [priorityRecords]);
 
+  // Handle changes in 'doiTuongUuTien' select to toggle file upload visibility
+  const handleDoiTuongUuTienChange = (value: string) => {
+    if (value === "None") {
+      setShowDoiTuongUuTienFile(false);
+      form.setFieldsValue({ fileDT: undefined });
+      form.validateFields(["fileDT"]);
+    } else {
+      setShowDoiTuongUuTienFile(true);
+    }
+  };
+
   // Xử lý khi submit form
   const onFinish = (values: any) => {
+    if (priorityRecords.length > 0 && !editingRecordId) {
+      message.warn("Bạn chỉ được phép khai báo một thông tin ưu tiên. Vui lòng sửa hoặc xóa bản ghi hiện có.");
+      return;
+    }
+
+    const fileKVBlobUrl = values.fileKV && values.fileKV[0] && values.fileKV[0].originFileObj
+      ? URL.createObjectURL(values.fileKV[0].originFileObj)
+      : null;
+
+    const fileDTBlobUrl = showDoiTuongUuTienFile && values.fileDT && values.fileDT[0] && values.fileDT[0].originFileObj
+      ? URL.createObjectURL(values.fileDT[0].originFileObj)
+      : null;
+
     const newRecord: PriorityInfo = {
       ...values,
-      // Trong thực tế, bạn sẽ xử lý file upload ở đây (gửi lên server)
-      // Hiện tại, chúng ta chỉ lưu tên file để mô phỏng
-      fileKV: values.fileKV && values.fileKV[0] ? values.fileKV[0].name : null,
-      fileDT: values.fileDT && values.fileDT[0] ? values.fileDT[0].name : null,
-      status: "Chờ duyệt", // Mặc định là "Chờ duyệt" khi tạo mới hoặc cập nhật
+      fileKV: fileKVBlobUrl,
+      fileDT: fileDTBlobUrl,
+      status: "Chờ duyệt",
     };
 
     if (editingRecordId) {
-      // Chỉnh sửa bản ghi hiện có
       setPriorityRecords(prevRecords =>
-        prevRecords.map(record =>
-          record.id === editingRecordId ? { ...newRecord, id: editingRecordId } : record
-        )
+        prevRecords.map(record => {
+          if (record.id === editingRecordId) {
+            if (record.fileKV && record.fileKV.startsWith('blob:') && record.fileKV !== newRecord.fileKV) {
+              URL.revokeObjectURL(record.fileKV);
+            }
+            if (record.fileDT && record.fileDT.startsWith('blob:') && record.fileDT !== newRecord.fileDT) {
+              URL.revokeObjectURL(record.fileDT);
+            }
+            return { ...newRecord, id: editingRecordId };
+          }
+          return record;
+        })
       );
       message.success("Cập nhật thông tin ưu tiên thành công!");
-      setEditingRecordId(null); // Kết thúc chế độ chỉnh sửa
+      setEditingRecordId(null);
     } else {
-      // Thêm bản ghi mới
-      newRecord.id = Date.now().toString(); // Tạo ID đơn giản
+      newRecord.id = Date.now().toString();
       setPriorityRecords(prevRecords => [...prevRecords, newRecord]);
       message.success("Lưu thông tin ưu tiên thành công!");
     }
-    form.resetFields(); // Reset form sau khi lưu/cập nhật
+    form.resetFields();
+    setShowDoiTuongUuTienFile(true);
   };
 
   // Xử lý chỉnh sửa một bản ghi
   const handleEdit = (record: PriorityInfo) => {
     setEditingRecordId(record.id);
-    // Lưu ý: Ant Design Upload yêu cầu `fileList` có `uid` và `name`
-    const fileKVList = record.fileKV ? [{ uid: record.fileKV, name: record.fileKV, status: 'done' }] : [];
-    const fileDTList = record.fileDT ? [{ uid: record.fileDT, name: record.fileDT, status: 'done' }] : [];
+    const fileKVName = record.fileKV ? `file_kv_${record.id}.pdf` : null;
+    const fileDTName = record.fileDT ? `file_dt_${record.id}.pdf` : null;
+
+    const fileKVList = record.fileKV ? [{ uid: record.fileKV, name: fileKVName, status: 'done' }] : [];
+    const fileDTList = record.fileDT ? [{ uid: record.fileDT, name: fileDTName, status: 'done' }] : [];
 
     form.setFieldsValue({
       ...record,
       fileKV: fileKVList,
       fileDT: fileDTList,
     });
+    setShowDoiTuongUuTienFile(record.doiTuongUuTien !== "None");
   };
 
   // Xử lý xóa một bản ghi
@@ -108,25 +145,35 @@ const InfoPriority: React.FC = () => {
       okType: 'danger',
       cancelText: 'Hủy',
       onOk() {
-        setPriorityRecords(prevRecords => prevRecords.filter(record => record.id !== id));
+        setPriorityRecords(prevRecords => {
+          const recordToDelete = prevRecords.find(record => record.id === id);
+          if (recordToDelete) {
+            if (recordToDelete.fileKV && recordToDelete.fileKV.startsWith('blob:')) {
+              URL.revokeObjectURL(recordToDelete.fileKV);
+            }
+            if (recordToDelete.fileDT && recordToDelete.fileDT.startsWith('blob:')) {
+              URL.revokeObjectURL(recordToDelete.fileDT);
+            }
+          }
+          return prevRecords.filter(record => record.id !== id);
+        });
         message.success("Xóa thông tin ưu tiên thành công!");
-        // Nếu đang chỉnh sửa bản ghi bị xóa, reset form
         if (editingRecordId === id) {
           form.resetFields();
           setEditingRecordId(null);
+          setShowDoiTuongUuTienFile(true);
         }
       },
     });
   };
 
-  // Mô phỏng admin cập nhật trạng thái (Chỉ để xem giao diện)
-  const simulateAdminAction = (recordId: string, status: "Đã duyệt" | "Từ chối", reason?: string) => {
-    setPriorityRecords(prevRecords =>
-      prevRecords.map(record =>
-        record.id === recordId ? { ...record, status, reason: status === "Từ chối" ? reason : undefined } : record
-      )
-    );
-    message.info(`Trạng thái của bản ghi ${recordId} đã được cập nhật bởi admin.`);
+  // Hàm xử lý khi nhấn "Xem file"
+  const handleViewFile = (fileUrl: string | undefined) => {
+    if (fileUrl) {
+      window.open(fileUrl, '_blank');
+    } else {
+      message.warn("Không có file minh chứng để xem.");
+    }
   };
 
   // Định nghĩa cột cho Table
@@ -147,13 +194,29 @@ const InfoPriority: React.FC = () => {
       title: "Minh chứng KV",
       dataIndex: "fileKV",
       key: "fileKV",
-      render: (text: string) => text || "Không có file",
+      render: (fileUrl: string) => (
+        fileUrl ? (
+          <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewFile(fileUrl)}>
+            Xem file
+          </Button>
+        ) : (
+          "Không có file"
+        )
+      ),
     },
     {
       title: "Minh chứng ĐT",
       dataIndex: "fileDT",
       key: "fileDT",
-      render: (text: string) => text || "Không có file",
+      render: (fileUrl: string) => (
+        fileUrl ? (
+          <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewFile(fileUrl)}>
+            Xem file
+          </Button>
+        ) : (
+          "Không có file"
+        )
+      ),
     },
     {
       title: "Trạng thái",
@@ -176,17 +239,6 @@ const InfoPriority: React.FC = () => {
             <Tag color={color}>{status}</Tag>
             {status === "Từ chối" && record.reason && (
               <Tag color="volcano">Lý do: {record.reason}</Tag>
-            )}
-            {/* Nút mô phỏng Admin cập nhật */}
-            {status === "Chờ duyệt" && (
-              <Space>
-                <Button size="small" onClick={() => simulateAdminAction(record.id, "Đã duyệt")}>
-                  Admin Duyệt
-                </Button>
-                <Button size="small" danger onClick={() => simulateAdminAction(record.id, "Từ chối", "Minh chứng không rõ ràng")}>
-                  Admin Từ chối
-                </Button>
-              </Space>
             )}
           </Space>
         );
@@ -217,9 +269,11 @@ const InfoPriority: React.FC = () => {
     },
   ];
 
+  // Logic để vô hiệu hóa form nếu đã có bản ghi và không trong chế độ chỉnh sửa
+  const isFormDisabled = priorityRecords.length > 0 && editingRecordId === null;
+
   return (
     <div style={{ maxWidth: 1200, margin: "auto", padding: 20 }}>
-      {/* Form khai báo thông tin ưu tiên */}
       <div style={{
         backgroundColor: '#fff',
         padding: 30,
@@ -235,14 +289,17 @@ const InfoPriority: React.FC = () => {
           layout="vertical"
           onFinish={onFinish}
         >
-          <Row gutter={24}> {/* Tăng gutter để có khoảng cách tốt hơn */}
-            <Col xs={24} sm={12}> {/* Responsive: 1 cột trên di động, 2 cột trên desktop */}
+          <Row gutter={24}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 label="Khu vực ưu tiên"
                 name="khuVucUuTien"
                 rules={[{ required: true, message: "Vui lòng chọn khu vực ưu tiên" }]}
               >
-                <Select placeholder="Chọn khu vực ưu tiên">
+                <Select
+                  placeholder="Chọn khu vực ưu tiên"
+                  disabled={isFormDisabled} // Vô hiệu hóa khi form bị khóa
+                >
                   {khuVucUuTienOptions.map(({ label, value }) => (
                     <Option key={value} value={value}>
                       {label}
@@ -255,10 +312,13 @@ const InfoPriority: React.FC = () => {
                 label="File minh chứng khu vực ưu tiên"
                 name="fileKV"
                 valuePropName="fileList"
-                getValueFromEvent={(e: any) => e && e.fileList}
+                getValueFromEvent={(e: any) => {
+                  if (Array.isArray(e)) return e;
+                  return e && e.fileList;
+                }}
                 rules={[{ required: true, message: "Vui lòng upload file minh chứng khu vực ưu tiên" }]}
               >
-                <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png">
+                <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isFormDisabled}>
                   <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
                 </Upload>
               </Form.Item>
@@ -270,7 +330,11 @@ const InfoPriority: React.FC = () => {
                 name="doiTuongUuTien"
                 rules={[{ required: true, message: "Vui lòng chọn đối tượng ưu tiên" }]}
               >
-                <Select placeholder="Chọn đối tượng ưu tiên">
+                <Select
+                  placeholder="Chọn đối tượng ưu tiên"
+                  onChange={handleDoiTuongUuTienChange}
+                  disabled={isFormDisabled} // Vô hiệu hóa khi form bị khóa
+                >
                   {doiTuongUuTienOptions.map(({ label, value }) => (
                     <Option key={value} value={value}>
                       {label}
@@ -279,22 +343,33 @@ const InfoPriority: React.FC = () => {
                 </Select>
               </Form.Item>
 
-              <Form.Item
-                label="File minh chứng đối tượng ưu tiên"
-                name="fileDT"
-                valuePropName="fileList"
-                getValueFromEvent={(e: any) => e && e.fileList}
-                rules={[{ required: true, message: "Vui lòng upload file minh chứng đối tượng ưu tiên" }]}
-              >
-                <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png">
-                  <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
-                </Upload>
-              </Form.Item>
+              {showDoiTuongUuTienFile && (
+                <Form.Item
+                  label="File minh chứng đối tượng ưu tiên"
+                  name="fileDT"
+                  valuePropName="fileList"
+                  getValueFromEvent={(e: any) => {
+                    if (Array.isArray(e)) return e;
+                    return e && e.fileList;
+                  }}
+                  rules={[{ required: true, message: "Vui lòng upload file minh chứng đối tượng ưu tiên" }]}
+                >
+                  <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isFormDisabled}>
+                    <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+                  </Upload>
+                </Form.Item>
+              )}
             </Col>
           </Row>
 
           <Form.Item style={{ textAlign: "left", marginTop: 20 }}>
-            <Button type="primary" htmlType="submit" size="middle" style={{ width: '17%' }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="middle"
+              style={{ width: '17%' }}
+              disabled={isFormDisabled && !editingRecordId} // Vô hiệu hóa nút nếu đã có bản ghi và không chỉnh sửa
+            >
               {editingRecordId ? "Cập nhật" : "Lưu thông tin ưu tiên"}
             </Button>
             {editingRecordId && (
@@ -302,6 +377,7 @@ const InfoPriority: React.FC = () => {
                 onClick={() => {
                   form.resetFields();
                   setEditingRecordId(null);
+                  setShowDoiTuongUuTienFile(true);
                 }}
                 style={{ marginLeft: 10 }}
               >
@@ -312,7 +388,6 @@ const InfoPriority: React.FC = () => {
         </Form>
       </div>
 
-      {/* Bảng hiển thị thông tin đã khai báo */}
       <div style={{
         backgroundColor: '#fff',
         padding: 30,
@@ -323,8 +398,8 @@ const InfoPriority: React.FC = () => {
         <h2 style={{ textAlign: "center", marginBottom: 30, color: '#1890ff' }}>Thông tin Ưu tiên của bạn</h2>
         <Table
           columns={columns}
-          dataSource={priorityRecords.map(record => ({ ...record, key: record.id }))} // Thêm key cho Table
-          pagination={false} // Tắt phân trang nếu ít bản ghi
+          dataSource={priorityRecords.map(record => ({ ...record, key: record.id }))}
+          pagination={false}
           bordered
         />
         {priorityRecords.length === 0 && (
