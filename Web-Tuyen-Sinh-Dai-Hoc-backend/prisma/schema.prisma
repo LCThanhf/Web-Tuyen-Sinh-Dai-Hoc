@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  student Student?
+  admin   Admin?
+
+  @@map("users")
+}
+
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
+model Student {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  citizenId      String    @unique
+  fullName       String
+  email          String
+  phone          String
+  dob            DateTime
+  gender         Gender
+  cccdIssuePlace String
+  cccdIssueDate  DateTime
+  address        String
+  city           String
+  district       String
+  highSchoolName String
+  graduationYear Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalInfo PersonalInfo?
+  priority     Priority?
+  scores       Score[]
+  achievements Achievement[]
+  applications Application[]
+  proofs       Proof[]
+
+  @@map("students")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+model PersonalInfo {
+  id        String   @id @default(cuid())
+  studentId String   @unique
+  status    ProofStatus @default(PENDING)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("personal_infos")
+}
+
+model Priority {
+  id             String   @id @default(cuid())
+  studentId      String   @unique
+  priorityObject String?
+  priorityArea   String?
+  status         ProofStatus @default(PENDING)
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("priorities")
+}
+
+model Score {
+  id             String    @id @default(cuid())
+  studentId      String
+  type           ScoreType
+  examBan        String?
+  examNumber     String?
+  subjects       Json
+  organizingUnit String?
+  status         ProofStatus @default(PENDING)
+  reason         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+}
+
+enum ScoreType {
+  THPTQG
+  HKB
+  DGNL
+  DGTD
+}
+
+model Achievement {
+  id          String      @id @default(cuid())
+  studentId   String
+  type        String
+  name        String
+  issuer      String?
+  issueDate   DateTime?
+  score       Float?
+  status      ProofStatus @default(PENDING)
+  reason      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("achievements")
+}
+
+model Proof {
+  id        String      @id @default(cuid())
+  studentId String
+  type      String
+  fileName  String?
+  filePath  String?
+  isRequired Boolean    @default(false)
+  status    ProofStatus @default(PENDING)
+  reason    String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("proofs")
+}
+
+enum ProofStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model School {
+  id               String            @id @default(cuid())
+  name             String
+  code             String            @unique
+  totalQuota       Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  majors           Major[]
+  applications     Application[]
+  admissionMethods AdmissionMethod[]
+
+  @@map("schools")
+}
+
+model Major {
+  id                    String                 @id @default(cuid())
+  name                  String
+  code                  String
+  schoolId              String
+  quota                 Int                    @default(0)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  // Relations
+  school                School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  applications          Application[]
+  admissionCombinations AdmissionCombination[]
+
+  @@map("majors")
+}
+
+model AdmissionMethod {
+  id         String  @id @default(cuid())
+  schoolId   String
+  name       String
+  percentage Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("admission_methods")
+}
+
+model AdmissionCombination {
+  id       String   @id @default(cuid())
+  name     String
+  subjects Json
+  majorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  major        Major         @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@map("admission_combinations")
+}
+
+model Application {
+  id                      String   @id @default(cuid())
+  studentId               String
+  schoolId                String
+  majorId                 String
+  admissionCombinationId  String?
+  admissionMethod         String
+  organizingUnit          String?
+  priorityOrder           Int
+  scoreForMethod          Float?
+  totalScore              Float?
+  status                  ApplicationStatus @default(PENDING)
+  submissionDate          DateTime @default(now())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  student               Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school                School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  major                 Major                 @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  admissionCombination  AdmissionCombination? @relation(fields: [admissionCombinationId], references: [id])
+
+  @@map("applications")
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fullName  String
+  phone     String?
+  role      AdminRole @default(ADMIN)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admins")
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
