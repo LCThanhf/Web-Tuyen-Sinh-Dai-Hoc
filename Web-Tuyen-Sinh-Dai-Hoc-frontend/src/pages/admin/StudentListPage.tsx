@@ -46,7 +46,7 @@ const StudentAndProofManagementPage: React.FC = () => {
   // Modal Nguyện vọng
   const [isApplicationModalVisible, setIsApplicationModalVisible] = useState(false);
   const [selectedStudentForApplication, setSelectedStudentForApplication] = useState<any>(null);
-  const [studentApplications, setStudentApplications] = useState([]);
+  const [studentApplications, setStudentApplications] = useState<any[]>([]);
 
   useEffect(() => {
     // Nếu bạn muốn giả lập gọi API, bật loading trong 500ms rồi load data

@@ -13,6 +13,7 @@ import {
   Typography,
   Tooltip
 } from 'antd';
+import type { ColumnType } from 'antd/es/table';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -245,7 +246,18 @@ const AdminManageApplicationsPage: React.FC = () => {
   }, [filterSchoolId, majors]);
 
   // Cột bảng đã chỉnh sửa theo yêu cầu
-  const columns = [
+  interface TableColumn extends ColumnType<StudentApplication> {
+    title: string;
+    dataIndex?: keyof StudentApplication | string;
+    key: string;
+  }
+
+  interface FilterOption {
+    text: string;
+    value: string;
+  }
+
+  const columns: TableColumn[] = [
     {
       title: 'Mã NV',
       dataIndex: 'id',
@@ -276,17 +288,6 @@ const AdminManageApplicationsPage: React.FC = () => {
       dataIndex: 'majorId',
       key: 'majorName',
       render: (majorId: string) => getMajorName(majorId),
-      sorter: (a: StudentApplication, b: StudentApplication) => getMajorName(a.majorId).localeCompare(getMajorName(b.majorId)),
-    },
-    {
-      title: 'Phương thức xét tuyển',
-      dataIndex: 'admissionMethod',
-      key: 'admissionMethod',
-      filters: [
-        { text: 'Điểm THPT / Học bạ', value: 'Điểm THPT / Học bạ' },
-        { text: 'Đánh giá năng lực / Tư duy', value: 'Đánh giá năng lực / Tư duy' },
-      ],
-      onFilter: (value, record) => record.admissionMethod === value,
     },
     {
       title: 'Tổ hợp / Đơn vị tổ chức',
@@ -360,7 +361,7 @@ const AdminManageApplicationsPage: React.FC = () => {
           showSearch
           optionFilterProp="children"
           filterOption={(input, option) =>
-            (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+            String(option?.children || '').toLowerCase().includes(input.toLowerCase())
           }
         >
           {schools.map(school => (
@@ -380,7 +381,7 @@ const AdminManageApplicationsPage: React.FC = () => {
           showSearch
           optionFilterProp="children"
           filterOption={(input, option) =>
-            (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+            String(option?.children || '').toLowerCase().includes(input.toLowerCase())
           }
         >
           {currentFilteredMajors.map(major => (
@@ -446,7 +447,7 @@ const AdminManageApplicationsPage: React.FC = () => {
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
-                (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
               }
             >
               {schools.map(school => (
@@ -472,7 +473,7 @@ const AdminManageApplicationsPage: React.FC = () => {
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
-                (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                String(option?.children || '').toLowerCase().includes(input.toLowerCase())
               }
             >
               {modalFilteredMajors.map(major => (
@@ -513,7 +514,7 @@ const AdminManageApplicationsPage: React.FC = () => {
                 showSearch
                 optionFilterProp="children"
                 filterOption={(input, option) =>
-                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                  String(option?.children || '').toLowerCase().includes(input.toLowerCase())
                 }
               >
                 {modalFilteredCombinations.map(combo => (

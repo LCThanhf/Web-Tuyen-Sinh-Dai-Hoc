@@ -379,13 +379,13 @@ const ManageSchoolsPage: React.FC = () => {
               <>
                 {fields.map(({ key, name, fieldKey, ...restField }) => (
                   <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, 'name']} fieldKey={[fieldKey, 'name']} noStyle>
+                    <Form.Item {...restField} name={[name, 'name']} fieldKey={fieldKey ? [fieldKey, 'name'] : undefined} noStyle>
                       <Input disabled style={{ width: 120 }} />
                     </Form.Item>
                     <Form.Item
                       {...restField}
                       name={[name, 'percentage']}
-                      fieldKey={[fieldKey, 'percentage']}
+                      fieldKey={fieldKey ? [fieldKey, 'percentage'] : undefined}
                       rules={[
                         { required: true, message: 'Vui lòng nhập phần trăm!' },
                         { type: 'number', min: 0, max: 100, message: 'Phần trăm phải từ 0 đến 100!' },

@@ -287,7 +287,7 @@ const ManageMajorsPage: React.FC = () => {
             showSearch
             optionFilterProp="children"
             filterOption={(input, option) =>
-              (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+              String(option?.children || '').toLowerCase().includes(input.toLowerCase())
             }
           >
             {schools.map(school => (
@@ -338,7 +338,7 @@ const ManageMajorsPage: React.FC = () => {
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
-                (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                String(option?.children || '').toLowerCase().includes(input.toLowerCase())
               }
             >
               {schools.map(school => (
@@ -385,7 +385,7 @@ const ManageMajorsPage: React.FC = () => {
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
-                (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                String(option?.children || '').toLowerCase().includes(input.toLowerCase())
               }
             >
               {allAdmissionCombinations.map(combo => (
