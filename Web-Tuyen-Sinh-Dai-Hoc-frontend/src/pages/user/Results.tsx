@@ -1,28 +1,9 @@
 import React, { useState } from "react";
 import { Input, Button, Typography, Card, message, Alert, Spin } from "antd";
 import { LoadingOutlined } from '@ant-design/icons';
+import type { KetQua, Nguyenvong } from "../../types/result";
 
 const { Title, Text } = Typography;
-
-// Định nghĩa cấu trúc cho mỗi nguyện vọng
-interface Nguyenvong {
-  maNguyenvong: string;
-  tenNganh: string;
-  tenTruong: string;
-  diemChuan: number;
-  diemDat: number;
-  phuongThucXetTuyen: string; // THÊM TRƯỜNG NÀY
-  trangThai: "Trúng tuyển" | "Không trúng tuyển" | "Đủ điều kiện xét tuyển";
-  ghiChu?: string;
-}
-
-// Định nghĩa cấu trúc kết quả tổng thể
-interface KetQua {
-  cccd: string;
-  fullName: string;
-  trangThaiKetQuaTongThe: "Trúng tuyển NV1" | "Trúng tuyển các NV sau" | "Không trúng tuyển" | "Chưa có kết quả";
-  nguyenvongDetails?: Nguyenvong[]; // Chi tiết các nguyện vọng
-}
 
 // Dữ liệu kết quả mẫu mô phỏng các trường hợp thực tế
 const sampleResults: KetQua[] = [
