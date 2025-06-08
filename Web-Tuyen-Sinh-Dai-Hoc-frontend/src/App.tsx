@@ -17,6 +17,7 @@ import InfoPriority from "./pages/user/InfoRegistration/Priority";
 import Scores from "./pages/user/InfoRegistration/Scores";
 import AchievementsCerts from "./pages/user/InfoRegistration/Achievements";
 import Profile from "./pages/user/Profile";
+import StudentProfilePage from "./pages/user/StudentProfilePage";
 
 // IMPORT CÁC TRANG ADMIN
 import AdminHomePage from "./pages/admin/AdminHomePage";
@@ -33,7 +34,7 @@ import AdminProfilePage from "./pages/admin/AdminProfilePage";
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [userData, setUserData] = useState<any>(null); // Kept for future use by child components
+  const [, setUserData] = useState<any>(null); // Kept for future use by child components
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -138,7 +139,8 @@ const App: React.FC = () => {
           <Route path="register-nguyenvong" element={<RegisterNguyenVong />} />
           <Route path="status" element={<Status />} />
           <Route path="results" element={<Results />} />
-          <Route path="profile" element={<Profile />} />
+          <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="profile/edit" element={<Profile />} />
         </Route>
 
         <Route

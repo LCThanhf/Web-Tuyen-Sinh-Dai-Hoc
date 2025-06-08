@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Form, Input, Button, DatePicker, Radio, message, Typography, Spin, Alert, Select } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { authApi } from "../../services/authApi";
 import { studentApi } from "../../services/studentApi";
@@ -27,6 +29,7 @@ interface ProfileData {
 
 const Profile: React.FC = () => {
   const [form] = Form.useForm();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +147,16 @@ const Profile: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 800, margin: "auto", padding: 20 }}>
-      <Title level={3}>Thông tin cá nhân</Title>
+      <div style={{ marginBottom: 16 }}>
+        <Button 
+          icon={<ArrowLeftOutlined />} 
+          onClick={() => navigate('/student/profile')}
+          style={{ marginBottom: 16 }}
+        >
+          Quay lại hồ sơ
+        </Button>
+      </div>
+      <Title level={3}>Chỉnh sửa thông tin cá nhân</Title>
       
       {error && (
         <Alert

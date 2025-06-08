@@ -71,10 +71,40 @@ export interface Certificate {
   rejectionReason?: string;
 }
 
+// Interface for the actual backend response structure
+export interface StudentWithPersonalInfo {
+  student: {
+    id: string;
+    userId: string;
+    dob?: string;
+    gender?: 'MALE' | 'FEMALE';
+    cccdIssuePlace?: string;
+    cccdIssueDate?: string;
+    address?: string;
+    city?: string;
+    district?: string;
+    highSchoolName?: string;
+    graduationYear?: number;
+    user: {
+      cccd: string;
+      fullName: string;
+      email: string;
+      phone: string;
+    };
+  };
+  personalInfo?: PersonalInfo;
+}
+
 export const studentApi = {
   // Personal Information
   getPersonalInfo: async (): Promise<PersonalInfo | null> => {
     const response = await apiClient.get<ApiResponse<PersonalInfo>>('/student/personal-info');
+    return response.data.data;
+  },
+
+  // Get complete student profile (new method for handling actual backend response)
+  getStudentProfile: async (): Promise<StudentWithPersonalInfo | null> => {
+    const response = await apiClient.get<ApiResponse<StudentWithPersonalInfo>>('/student/personal-info');
     return response.data.data;
   },
 
