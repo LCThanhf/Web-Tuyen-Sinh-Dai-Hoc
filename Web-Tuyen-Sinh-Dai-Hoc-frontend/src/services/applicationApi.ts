@@ -1,6 +1,6 @@
 // Application API service
-import { apiClient } from '../../services/api';
-import type { ApiResponse } from '../../services/api';
+import { apiClient } from './api';
+import type { ApiResponse } from './api';
 
 // Types for application data
 export interface School {

@@ -1,17 +1,71 @@
-import React from 'react';
-import { Card, Row, Col, Typography, Button, Space, Result } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, Typography, Button, Space, Result, Spin } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { studentApi } from '../../services/studentApi';
+import { applicationApi } from '../../services/applicationApi';
 
 const { Title, Text } = Typography;
 
+interface DashboardData {
+  hasPersonalInfo: boolean;
+  personalInfoStatus: string;
+  applicationCount: number;
+  applications: any[];
+  hasSubmittedApplication: boolean;
+}
+
 const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    hasPersonalInfo: false,
+    personalInfoStatus: 'PENDING',
+    applicationCount: 0,
+    applications: [],
+    hasSubmittedApplication: false
+  });
 
-  // Dữ liệu giả định cho trạng thái hồ sơ (bạn sẽ thay bằng dữ liệu thực tế từ API)
-  const hoSoDaNop = false; // Ví dụ: chưa nộp hồ sơ
-  const hoSoHopLe = false;
-  const ketQuaTuyểnSinh = null; // Ví dụ: chưa có kết quả
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch personal info status
+        const personalInfo = await studentApi.getPersonalInfo();
+        
+        // Fetch applications
+        const applications = await applicationApi.getMyApplications();
+        
+        setDashboardData({
+          hasPersonalInfo: !!personalInfo,
+          personalInfoStatus: personalInfo?.status || 'PENDING',
+          applicationCount: applications.length,
+          applications: applications,
+          hasSubmittedApplication: applications.length > 0
+        });
+        
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const { hasPersonalInfo, personalInfoStatus, applicationCount, hasSubmittedApplication } = dashboardData;
+  const hoSoHopLe = personalInfoStatus === 'APPROVED';
+  const ketQuaTuyểnSinh = null; // Will be implemented later when results are available
 
   return (
     <div>
@@ -28,18 +82,32 @@ const StudentDashboardPage: React.FC = () => {
               <Button type="link" onClick={() => navigate('/student/status')}>Xem chi tiết</Button>
             ]}
           >
-            {!hoSoDaNop ? (
+            {!hasPersonalInfo ? (
               <Result
                 icon={<InfoCircleOutlined style={{ color: '#1890ff' }} />}
-                title="Bạn chưa đăng ký thông tin sinh."
-                extra={<Button type="primary" onClick={() => navigate('/student/info-registration')}>Đăng ký ngay</Button>}
+                title="Bạn chưa đăng ký thông tin cá nhân"
+                extra={<Button type="primary" onClick={() => navigate('/student/info-registration/personal')}>Đăng ký ngay</Button>}
                 style={{ padding: '0 0 24px 0' }}
               />
             ) : (
               <>
-                <p>Tình trạng: {hoSoHopLe ? <Text type="success"><CheckCircleOutlined /> Đã nộp và hợp lệ</Text> : <Text type="warning"><ExclamationCircleOutlined /> Đã nộp, đang chờ duyệt/có lỗi</Text>}</p>
-                <p>Nguyện vọng đã đăng ký: 3 nguyện vọng</p> {/* Dữ liệu giả định */}
-                <p>Hồ sơ đã nộp: 15/05/2025</p> {/* Dữ liệu giả định */}
+                <p>Tình trạng hồ sơ cá nhân: {
+                  hoSoHopLe ? 
+                    <Text type="success"><CheckCircleOutlined /> Đã duyệt</Text> : 
+                    personalInfoStatus === 'REJECTED' ?
+                      <Text type="danger"><ExclamationCircleOutlined /> Bị từ chối</Text> :
+                      <Text type="warning"><ExclamationCircleOutlined /> Đang chờ duyệt</Text>
+                }</p>
+                <p>Nguyện vọng đã đăng ký: {applicationCount} nguyện vọng</p>
+                {hasSubmittedApplication && (
+                  <p>Trạng thái nguyện vọng: {
+                    dashboardData.applications.some(app => app.status === 'APPROVED') ?
+                      <Text type="success">Có nguyện vọng được duyệt</Text> :
+                    dashboardData.applications.some(app => app.status === 'REJECTED') ?
+                      <Text type="danger">Có nguyện vọng bị từ chối</Text> :
+                      <Text type="warning">Đang chờ duyệt</Text>
+                  }</p>
+                )}
               </>
             )}
           </Card>
@@ -92,10 +160,35 @@ const StudentDashboardPage: React.FC = () => {
       </Row>
 
       <div style={{ marginTop: 40, textAlign: 'center' }}>
-        <Title level={4}>Bạn muốn làm gì tiếp theo ?</Title>
+        <Title level={4}>Bạn muốn làm gì tiếp theo?</Title>
         <Space size="large">
-          <Button type="primary" size="middle"  style={{ width: '186px' }} onClick={() => navigate('/student/register-nguyenvong')}>Đăng ký nguyện vọng</Button>
-          <Button type="primary" size="middle"  style={{ width: '186px' }} onClick={() => navigate('/student/profile')}>Cập nhật thông tin</Button>
+          {!hasPersonalInfo ? (
+            <Button 
+              type="primary" 
+              size="middle" 
+              style={{ width: '200px' }} 
+              onClick={() => navigate('/student/info-registration/personal')}
+            >
+              Đăng ký thông tin cá nhân
+            </Button>
+          ) : (
+            <Button 
+              type="primary" 
+              size="middle" 
+              style={{ width: '186px' }} 
+              onClick={() => navigate('/student/register-nguyenvong')}
+            >
+              Đăng ký nguyện vọng
+            </Button>
+          )}
+          <Button 
+            type="primary" 
+            size="middle" 
+            style={{ width: '186px' }} 
+            onClick={() => navigate('/student/profile')}
+          >
+            Cập nhật thông tin
+          </Button>
         </Space>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import axios from "axios";
+import { authApi } from "./services/authApi";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -33,7 +33,7 @@ import AdminProfilePage from "./pages/admin/AdminProfilePage";
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<any>(null); // Kept for future use by child components
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,12 +44,9 @@ const App: React.FC = () => {
       
       if (token && storedUserData) {
         try {
-          // Set axios default authorization header
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
           // Verify token is still valid by calling profile endpoint
-          const response = await axios.get("http://localhost:5000/api/auth/profile");
-          const user = response.data.data.user;
+          const response = await authApi.getProfile();
+          const user = response.user;
           
           setUserData(user);
           const role = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? 'admin' : 'student';
@@ -59,7 +56,6 @@ const App: React.FC = () => {
           // Token is invalid, clear storage
           localStorage.removeItem("token");
           localStorage.removeItem("userData");
-          delete axios.defaults.headers.common['Authorization'];
         }
       }
       setLoading(false);
@@ -71,18 +67,11 @@ const App: React.FC = () => {
   const handleLogin = (role: string, user: any) => {
     setUserRole(role);
     setUserData(user);
-    
-    // Set axios default authorization header
-    const token = localStorage.getItem("token");
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userData");
-    delete axios.defaults.headers.common['Authorization'];
     setUserRole(null);
     setUserData(null);
   };

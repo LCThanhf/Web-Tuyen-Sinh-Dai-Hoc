@@ -168,7 +168,7 @@
 
 
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Layout, Menu, Dropdown, Avatar, Space } from "antd";
 import {
   HomeOutlined,
@@ -178,7 +178,6 @@ import {
   SettingOutlined,
   LogoutOutlined,
   SolutionOutlined,
-  TrophyOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -195,11 +194,26 @@ const StudentDashboard: React.FC<Props> = ({ onLogout }) => {
   const location = useLocation();
 
   const [collapsed, setCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState({
+    name: "Sinh viên",
+    avatar: undefined as string | undefined,
+  });
 
-  const currentUser = {
-    name: "Nguyễn Văn A",
-    avatar: "https://i.pravatar.cc/150?img=68",
-  };
+  useEffect(() => {
+    // Load user data from localStorage
+    const userData = localStorage.getItem("userData");
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        setCurrentUser({
+          name: user.fullName || "Sinh viên",
+          avatar: user.avatar || undefined,
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
 
   // Xác định menu đang active dựa trên url
   const getSelectedKey = () => {

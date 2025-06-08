@@ -11,6 +11,7 @@ import adminRoutes from './routes/adminRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import virtualFilterRoutes from './routes/virtualFilterRoutes';
 import resultsRoutes from './routes/resultsRoutes';
+import { AdminController } from './controllers/adminController';
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +25,9 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',  // Add Vite's default port
+    'http://localhost:5174',  // Add Vite's alternative port
     'http://127.0.0.1:5173',  // Alternative localhost format
+    'http://127.0.0.1:5174',  // Alternative localhost format
     process.env.FRONTEND_URL || 'http://localhost:3000'
   ],
   credentials: true,
@@ -38,7 +41,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// Routes
+// Public routes (no authentication required)
+app.get('/api/schools', AdminController.getSchools);
+app.get('/api/schools/:id', AdminController.getSchool);
+app.get('/api/majors', AdminController.getMajors);
+app.get('/api/majors/:id', AdminController.getMajor);
+app.get('/api/combinations', AdminController.getCombinations);
+app.get('/api/combinations/:id', AdminController.getCombination);
+app.get('/api/majors/:majorId/combinations', AdminController.getMajorCombinations);
+
+// Protected routes
 app.use('/api/auth', authRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/admin', adminRoutes);

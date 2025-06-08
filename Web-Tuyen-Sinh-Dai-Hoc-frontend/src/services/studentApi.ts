@@ -1,6 +1,6 @@
 // Student API service - comprehensive service for all student-related operations
-import { apiClient } from '../../services/api';
-import type { ApiResponse } from '../../services/api';
+import { apiClient } from './api';
+import type { ApiResponse } from './api';
 
 // Types for student data
 export interface PersonalInfo {
@@ -34,11 +34,17 @@ export interface Score {
 
 export interface Priority {
   id?: string;
-  type: 'AREA' | 'OBJECT' | 'FAMILY';
-  value: string;
-  description?: string;
+  studentId?: string;
+  priorityArea: string;
+  priorityObject: string;
+  areaFile?: string;
+  objectFile?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  rejectionReason?: string;
+  adminNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Achievement {

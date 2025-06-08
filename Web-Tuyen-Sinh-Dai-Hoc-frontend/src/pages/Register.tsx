@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Checkbox, message } from "antd";
-import axios from "axios";
+import { authApi } from "../services/authApi";
 import { useNavigate } from "react-router-dom";
 
 const Register: React.FC = () => {
@@ -14,9 +14,9 @@ const Register: React.FC = () => {
       // Remove confirm password from the data sent to backend
       const { confirm, agreement, ...registerData } = values;
       
-      const response = await axios.post("http://localhost:5000/api/auth/register", registerData);
+      const response = await authApi.register(registerData);
       
-      message.success(response.data.message);
+      message.success(response.message);
       form.resetFields();
       
       // Redirect to login after successful registration

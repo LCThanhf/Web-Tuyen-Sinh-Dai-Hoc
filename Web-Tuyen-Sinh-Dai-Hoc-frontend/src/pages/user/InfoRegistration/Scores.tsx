@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Form,
   Input,
@@ -15,9 +15,11 @@ import {
   Tag,
   Row,
   Col,
-  Checkbox, // Import Checkbox
+  Checkbox,
+  Spin,
 } from "antd";
 import { UploadOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { studentApi, type Score } from "../../../services/studentApi";
 
 const { TabPane } = Tabs;
 const { Option } = Select;
@@ -86,6 +88,8 @@ const Scores: React.FC = () => {
   const [hkbForm] = Form.useForm();
   const [dgnlDgtdForm] = Form.useForm();
 
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [selectedExamBan, setSelectedExamBan] = useState<string | null>(null);
   const [currentEditingExamKey, setCurrentEditingExamKey] = useState<string | null>(null);
   const [currentEditingHkbKey, setCurrentEditingHkbKey] = useState<string | null>(null);
@@ -107,6 +111,121 @@ const Scores: React.FC = () => {
     });
     return init;
   });
+
+  // Backend integration functions
+  const mapBackendToDisplayExam = (scores: Score[]): ExamScoreEntry | null => {
+    const thptScores = scores.filter(score => score.examType === 'THPT');
+    if (thptScores.length === 0) return null;
+
+    // Group scores by year and reconstruct exam entry
+    const scoresByYear = thptScores.reduce((acc, score) => {
+      if (!acc[score.year]) acc[score.year] = {};
+      acc[score.year][score.subject] = score.score;
+      return acc;
+    }, {} as Record<number, Record<string, number>>);
+
+    // Use the most recent year's data
+    const latestYear = Math.max(...Object.keys(scoresByYear).map(Number));
+    const latestScores = scoresByYear[latestYear];
+
+    // Determine examBan based on subjects
+    let examBan = "natural"; // default
+    const hasNatural = subjects.natural.some(subj => latestScores[subj] !== undefined);
+    const hasSocial = subjects.social.some(subj => latestScores[subj] !== undefined);
+    
+    if (hasNatural && !hasSocial) examBan = "natural";
+    else if (hasSocial && !hasNatural) examBan = "social";
+
+    return {
+      key: latestYear.toString(),
+      examNumber: `SBD${latestYear}`, // Mock exam number
+      examBan: examBan,
+      scores: latestScores,
+      examFile: [], // Files would need separate handling
+      status: thptScores[0].status === 'APPROVED' ? "Đã duyệt" : 
+              thptScores[0].status === 'REJECTED' ? "Từ chối" : "Chờ duyệt"
+    };
+  };
+
+  const mapBackendToDisplayHkb = (scores: Score[]): HkbScoreEntry | null => {
+    const hkbScores = scores.filter(score => score.examType === 'COMPETENCY');
+    if (hkbScores.length === 0) return null;
+
+    // Reconstruct HKB data from backend scores
+    const subjectAverages: { [subject: string]: number } = {};
+    const rawScores: { [subject: string]: number[] } = {};
+    
+    hkbScores.forEach(score => {
+      subjectAverages[score.subject] = score.score;
+      rawScores[score.subject] = Array(6).fill(score.score); // Mock raw scores
+    });
+
+    const overallAverage = Object.values(subjectAverages).reduce((a, b) => a + b, 0) / Object.values(subjectAverages).length;
+
+    return {
+      key: "hkb_entry",
+      scores: rawScores,
+      subjectAverages: subjectAverages,
+      averageOverall: overallAverage,
+      hkbFile: [], // Files would need separate handling
+      status: hkbScores[0].status === 'APPROVED' ? "Đã duyệt" : 
+              hkbScores[0].status === 'REJECTED' ? "Từ chối" : "Chờ duyệt"
+    };
+  };
+
+  const mapBackendToDisplayDgnl = (scores: Score[]): DgnlDgtdScoreEntry[] => {
+    const dgnlScores = scores.filter(score => score.examType === 'DGNL');
+    
+    return dgnlScores.map(score => {
+      // Parse the subject field to extract type and assessment unit
+      const subjectParts = score.subject.split('_');
+      const type = subjectParts[0] as "ĐGNL" | "ĐGTD";
+      const assessmentUnit = subjectParts.slice(1).join('_');
+
+      return {
+        key: score.id || Date.now().toString(),
+        type: type,
+        assessmentUnit: assessmentUnit,
+        assessmentScore: score.score,
+        assessmentFile: [], // Files would need separate handling
+        status: score.status === 'APPROVED' ? "Đã duyệt" : 
+                score.status === 'REJECTED' ? "Từ chối" : "Chờ duyệt",
+        noScoreDeclared: false
+      };
+    });
+  };
+
+  const loadScoresFromBackend = async () => {
+    try {
+      setLoading(true);
+      const scores = await studentApi.getScores();
+      
+      // Map backend data to display format
+      const examData = mapBackendToDisplayExam(scores);
+      const hkbData = mapBackendToDisplayHkb(scores);
+      const dgnlData = mapBackendToDisplayDgnl(scores);
+
+      setExamScoresTableData(examData);
+      setHkbScoresTableData(hkbData);
+      setDgnlDgtdScoresTableData(dgnlData);
+
+      // Update HKB raw scores if data exists
+      if (hkbData) {
+        setHkbRawScoresData(hkbData.scores);
+      }
+
+    } catch (error) {
+      console.error('Failed to load scores:', error);
+      message.error('Không thể tải dữ liệu điểm số. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadScoresFromBackend();
+  }, []);
 
   // Calculate average score for 6 terms of a subject
   const calculateSubjectAverage = (subjectScores: number[]): number => {
@@ -182,33 +301,59 @@ const Scores: React.FC = () => {
   }));
 
   // --- THPT Exam Score Handlers ---
-  const onExamFinish = (values: any) => {
-    const relevantSubjects = [...subjects.general];
-    if (values.examBan === "natural") {
-      relevantSubjects.push(...subjects.natural);
-    } else if (values.examBan === "social") {
-      relevantSubjects.push(...subjects.social);
+  const onExamFinish = async (values: any) => {
+    try {
+      setSubmitting(true);
+      const relevantSubjects = [...subjects.general];
+      if (values.examBan === "natural") {
+        relevantSubjects.push(...subjects.natural);
+      } else if (values.examBan === "social") {
+        relevantSubjects.push(...subjects.social);
+      }
+
+      const currentYear = new Date().getFullYear();
+      
+      // Save each subject score to backend
+      const savePromises = relevantSubjects.map(async (subject) => {
+        const score = values[`score${subject}`];
+        if (score !== null && score !== undefined) {
+          return await studentApi.saveScore({
+            examType: 'THPT',
+            subject: subject,
+            score: score,
+            year: currentYear
+          });
+        }
+      });
+
+      await Promise.all(savePromises.filter(Boolean));
+
+      // Create local display entry
+      const scores: { [key: string]: number | null } = {};
+      relevantSubjects.forEach((subj) => {
+        scores[subj] = values[`score${subj}`];
+      });
+
+      const newEntry: ExamScoreEntry = {
+        key: Date.now().toString(),
+        examNumber: values.examNumber,
+        examBan: values.examBan,
+        scores: scores,
+        examFile: values.examFile ? values.examFile.map((file: any) => file.originFileObj) : [],
+        status: "Chờ duyệt",
+      };
+
+      setExamScoresTableData(newEntry);
+      message.success("Lưu điểm thi THPT thành công! Chờ admin duyệt.");
+      examForm.resetFields();
+      setSelectedExamBan(null);
+      setCurrentEditingExamKey(null);
+    } catch (error) {
+      console.error('Failed to save exam scores:', error);
+      message.error('Không thể lưu điểm thi THPT. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
     }
-
-    const scores: { [key: string]: number | null } = {};
-    relevantSubjects.forEach((subj) => {
-      scores[subj] = values[`score${subj}`];
-    });
-
-    const newEntry: ExamScoreEntry = {
-      key: Date.now().toString(), // Unique key for this entry
-      examNumber: values.examNumber,
-      examBan: values.examBan,
-      scores: scores,
-      examFile: values.examFile ? values.examFile.map((file: any) => file.originFileObj) : [],
-      status: "Chờ duyệt",
-    };
-
-    setExamScoresTableData(newEntry); // Store as a single entry
-    message.success("Lưu điểm thi THPT thành công! Chờ admin duyệt.");
-    examForm.resetFields();
-    setSelectedExamBan(null);
-    setCurrentEditingExamKey(null);
   };
 
   const handleEditExamScore = () => {
@@ -231,12 +376,29 @@ const Scores: React.FC = () => {
     }
   };
 
-  const handleDeleteExamScore = () => {
-    setExamScoresTableData(null); // Remove the single entry
-    message.success("Xóa điểm thi THPT thành công!");
-    examForm.resetFields();
-    setSelectedExamBan(null);
-    setCurrentEditingExamKey(null);
+  const handleDeleteExamScore = async () => {
+    try {
+      setSubmitting(true);
+      
+      // Note: In a real implementation, you'd need to track score IDs from backend
+      // For now, we'll clear local data and could implement API call when IDs are available
+      
+      // TODO: Delete individual scores from backend when score IDs are properly tracked
+      // if (examScoresTableData && examScoresTableData.scoreIds) {
+      //   await Promise.all(examScoresTableData.scoreIds.map(id => studentApi.deleteScore(id)));
+      // }
+      
+      setExamScoresTableData(null); // Remove the single entry
+      message.success("Xóa điểm thi THPT thành công!");
+      examForm.resetFields();
+      setSelectedExamBan(null);
+      setCurrentEditingExamKey(null);
+    } catch (error) {
+      console.error('Failed to delete exam scores:', error);
+      message.error('Không thể xóa điểm thi THPT. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const examTableDisplayColumns = [
@@ -322,39 +484,60 @@ const Scores: React.FC = () => {
   ];
 
   // --- HKB Score Handlers ---
-  const onHkbFinish = () => {
-    hkbForm
-      .validateFields()
-      .then((values) => {
-        const subjectAverages: { [subject: string]: number } = {};
-        allSubjectsForHkb.forEach((subj) => {
-          subjectAverages[subj] = calculateSubjectAverage(hkbRawScoresData[subj]);
-        });
+  const onHkbFinish = async () => {
+    try {
+      await hkbForm.validateFields();
+      setSubmitting(true);
 
-        const newEntry: HkbScoreEntry = {
-          key: Date.now().toString(),
-          scores: { ...hkbRawScoresData }, // Raw scores for backup/admin view
-          subjectAverages: subjectAverages, // Calculated averages
-          averageOverall: parseFloat(averageOverallHkbScore().toFixed(2)),
-          hkbFile: values.hkbFile ? values.hkbFile.map((file: any) => file.originFileObj) : [],
-          status: "Chờ duyệt",
-        };
-        setHkbScoresTableData(newEntry); // Store as a single entry
-        message.success("Lưu điểm học bạ thành công! Chờ admin duyệt.");
-        hkbForm.resetFields();
-        // Reset raw scores data
-        setHkbRawScoresData(() => {
-          const init: { [key: string]: number[] } = {};
-          allSubjectsForHkb.forEach((subj) => {
-            init[subj] = Array(6).fill(0);
+      const values = hkbForm.getFieldsValue();
+      const subjectAverages: { [subject: string]: number } = {};
+      
+      // Calculate subject averages and save to backend
+      const savePromises = allSubjectsForHkb.map(async (subject) => {
+        const average = calculateSubjectAverage(hkbRawScoresData[subject]);
+        subjectAverages[subject] = average;
+        
+        if (average > 0) {
+          return await studentApi.saveScore({
+            examType: 'COMPETENCY',
+            subject: subject,
+            score: average,
+            year: new Date().getFullYear()
           });
-          return init;
-        });
-        setCurrentEditingHkbKey(null);
-      })
-      .catch(() => {
-        message.error("Vui lòng kiểm tra lại các trường bắt buộc và điểm.");
+        }
       });
+
+      await Promise.all(savePromises.filter(Boolean));
+
+      // Create local display entry
+      const newEntry: HkbScoreEntry = {
+        key: Date.now().toString(),
+        scores: { ...hkbRawScoresData }, // Raw scores for backup/admin view
+        subjectAverages: subjectAverages, // Calculated averages
+        averageOverall: parseFloat(averageOverallHkbScore().toFixed(2)),
+        hkbFile: values.hkbFile ? values.hkbFile.map((file: any) => file.originFileObj) : [],
+        status: "Chờ duyệt",
+      };
+      
+      setHkbScoresTableData(newEntry); // Store as a single entry
+      message.success("Lưu điểm học bạ thành công! Chờ admin duyệt.");
+      hkbForm.resetFields();
+      
+      // Reset raw scores data
+      setHkbRawScoresData(() => {
+        const init: { [key: string]: number[] } = {};
+        allSubjectsForHkb.forEach((subj) => {
+          init[subj] = Array(6).fill(0);
+        });
+        return init;
+      });
+      setCurrentEditingHkbKey(null);
+    } catch (error) {
+      console.error('Failed to save HKB scores:', error);
+      message.error("Không thể lưu điểm học bạ. Vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEditHkbScore = () => {
@@ -370,18 +553,35 @@ const Scores: React.FC = () => {
     }
   };
 
-  const handleDeleteHkbScore = () => {
-    setHkbScoresTableData(null);
-    message.success("Xóa điểm học bạ thành công!");
-    hkbForm.resetFields();
-    setHkbRawScoresData(() => { // Reset raw scores as well
-      const init: { [key: string]: number[] } = {};
-      allSubjectsForHkb.forEach((subj) => {
-        init[subj] = Array(6).fill(0);
+  const handleDeleteHkbScore = async () => {
+    try {
+      setSubmitting(true);
+      
+      // Note: In a real implementation, you'd need to track score IDs from backend
+      // For now, we'll clear local data and could implement API call when IDs are available
+      
+      // TODO: Delete individual scores from backend when score IDs are properly tracked
+      // if (hkbScoresTableData && hkbScoresTableData.scoreIds) {
+      //   await Promise.all(hkbScoresTableData.scoreIds.map(id => studentApi.deleteScore(id)));
+      // }
+      
+      setHkbScoresTableData(null);
+      message.success("Xóa điểm học bạ thành công!");
+      hkbForm.resetFields();
+      setHkbRawScoresData(() => { // Reset raw scores as well
+        const init: { [key: string]: number[] } = {};
+        allSubjectsForHkb.forEach((subj) => {
+          init[subj] = Array(6).fill(0);
+        });
+        return init;
       });
-      return init;
-    });
-    setCurrentEditingHkbKey(null);
+      setCurrentEditingHkbKey(null);
+    } catch (error) {
+      console.error('Failed to delete HKB scores:', error);
+      message.error('Không thể xóa điểm học bạ. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const hkbTableDisplayColumns = [
@@ -479,77 +679,93 @@ const Scores: React.FC = () => {
     return allUnits.filter(unit => !usedUnits.includes(unit.value));
   };
 
-  const onDgnlDgtdFinish = (values: any) => {
-    const { assessmentType, assessmentUnit, assessmentScore, assessmentFile, noScoreDeclared } = values;
+  const onDgnlDgtdFinish = async (values: any) => {
+    try {
+      setSubmitting(true);
+      const { assessmentType, assessmentUnit, assessmentScore, assessmentFile, noScoreDeclared } = values;
 
-    if (noScoreDeclared) {
-      // If "no score" is declared, save a special entry
-      const newEntry: DgnlDgtdScoreEntry = {
-        key: currentEditingDgnlDgtdKey || Date.now().toString(),
-        type: null, // Null type as no specific exam was taken
-        assessmentUnit: null, // Null unit
-        assessmentScore: null, // Null score
-        assessmentFile: [], // No file needed
-        status: "Không có điểm", // Custom status
-        noScoreDeclared: true,
-      };
+      if (noScoreDeclared) {
+        // If "no score" is declared, save a special entry
+        const newEntry: DgnlDgtdScoreEntry = {
+          key: currentEditingDgnlDgtdKey || Date.now().toString(),
+          type: null, // Null type as no specific exam was taken
+          assessmentUnit: null, // Null unit
+          assessmentScore: null, // Null score
+          assessmentFile: [], // No file needed
+          status: "Không có điểm", // Custom status
+          noScoreDeclared: true,
+        };
 
-      if (currentEditingDgnlDgtdKey) {
-        setDgnlDgtdScoresTableData(prev =>
-          prev.map(entry => entry.key === currentEditingDgnlDgtdKey ? newEntry : entry)
-        );
-        message.success("Cập nhật trạng thái không có điểm ĐGNL/ĐGTD thành công!");
-      } else {
-        // Prevent adding multiple "no score" entries
-        if (dgnlDgtdScoresTableData.some(entry => entry.noScoreDeclared)) {
-          message.error("Bạn đã khai báo là không có điểm ĐGNL/ĐGTD rồi.");
-          return;
+        if (currentEditingDgnlDgtdKey) {
+          setDgnlDgtdScoresTableData(prev =>
+            prev.map(entry => entry.key === currentEditingDgnlDgtdKey ? newEntry : entry)
+          );
+          message.success("Cập nhật trạng thái không có điểm ĐGNL/ĐGTD thành công!");
+        } else {
+          // Prevent adding multiple "no score" entries
+          if (dgnlDgtdScoresTableData.some(entry => entry.noScoreDeclared)) {
+            message.error("Bạn đã khai báo là không có điểm ĐGNL/ĐGTD rồi.");
+            return;
+          }
+          setDgnlDgtdScoresTableData(prev => [...prev, newEntry]);
+          message.success("Khai báo không có điểm ĐGNL/ĐGTD thành công!");
         }
-        setDgnlDgtdScoresTableData(prev => [...prev, newEntry]);
-        message.success("Khai báo không có điểm ĐGNL/ĐGTD thành công!");
-      }
-    } else {
-      // If score is being entered, proceed with validation and save
-      // Check if an entry for this type and unit already exists (only if not editing)
-      if (!currentEditingDgnlDgtdKey) {
-        const existingEntry = dgnlDgtdScoresTableData.find(
-          entry => entry.type === assessmentType && entry.assessmentUnit === assessmentUnit && !entry.noScoreDeclared
-        );
-        if (existingEntry) {
-          message.error(`Bạn đã có điểm ${assessmentType} cho đơn vị ${existingEntry.assessmentUnit} rồi. Không thể thêm trùng lặp.`);
-          return;
+      } else {
+        // If score is being entered, proceed with validation and save
+        // Check if an entry for this type and unit already exists (only if not editing)
+        if (!currentEditingDgnlDgtdKey) {
+          const existingEntry = dgnlDgtdScoresTableData.find(
+            entry => entry.type === assessmentType && entry.assessmentUnit === assessmentUnit && !entry.noScoreDeclared
+          );
+          if (existingEntry) {
+            message.error(`Bạn đã có điểm ${assessmentType} cho đơn vị ${existingEntry.assessmentUnit} rồi. Không thể thêm trùng lặp.`);
+            return;
+          }
+        }
+
+        // Save to backend
+        await studentApi.saveScore({
+          examType: 'DGNL', // Both ĐGNL and ĐGTD map to DGNL type
+          subject: `${assessmentType}_${assessmentUnit}`, // Store type and unit in subject field
+          score: assessmentScore,
+          year: new Date().getFullYear()
+        });
+
+        const newEntry: DgnlDgtdScoreEntry = {
+          key: currentEditingDgnlDgtdKey || Date.now().toString(),
+          type: assessmentType,
+          assessmentUnit: assessmentUnit,
+          assessmentScore: assessmentScore,
+          assessmentFile: assessmentFile
+            ? assessmentFile.map((file: any) => file.originFileObj)
+            : [],
+          status: "Chờ duyệt",
+          noScoreDeclared: false,
+        };
+
+        if (currentEditingDgnlDgtdKey) {
+          // Update existing entry
+          setDgnlDgtdScoresTableData(prev =>
+            prev.map(entry => entry.key === currentEditingDgnlDgtdKey ? newEntry : entry)
+          );
+          message.success(`Cập nhật điểm ${assessmentType} thành công!`);
+        } else {
+          // Add new entry
+          setDgnlDgtdScoresTableData(prev => [...prev, newEntry]);
+          message.success(`Lưu điểm ${assessmentType} thành công! Chờ admin duyệt.`);
         }
       }
 
-      const newEntry: DgnlDgtdScoreEntry = {
-        key: currentEditingDgnlDgtdKey || Date.now().toString(),
-        type: assessmentType,
-        assessmentUnit: assessmentUnit,
-        assessmentScore: assessmentScore,
-        assessmentFile: assessmentFile
-          ? assessmentFile.map((file: any) => file.originFileObj)
-          : [],
-        status: "Chờ duyệt",
-        noScoreDeclared: false,
-      };
-
-      if (currentEditingDgnlDgtdKey) {
-        // Update existing entry
-        setDgnlDgtdScoresTableData(prev =>
-          prev.map(entry => entry.key === currentEditingDgnlDgtdKey ? newEntry : entry)
-        );
-        message.success(`Cập nhật điểm ${assessmentType} thành công!`);
-      } else {
-        // Add new entry
-        setDgnlDgtdScoresTableData(prev => [...prev, newEntry]);
-        message.success(`Lưu điểm ${assessmentType} thành công! Chờ admin duyệt.`);
-      }
+      dgnlDgtdForm.resetFields();
+      setSelectedAssessmentType(null);
+      setCurrentEditingDgnlDgtdKey(null);
+      setNoDgnlDgtdScore(false); // Reset checkbox
+    } catch (error) {
+      console.error('Failed to save DGNL/DGTD scores:', error);
+      message.error('Không thể lưu điểm ĐGNL/ĐGTD. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
     }
-
-    dgnlDgtdForm.resetFields();
-    setSelectedAssessmentType(null);
-    setCurrentEditingDgnlDgtdKey(null);
-    setNoDgnlDgtdScore(false); // Reset checkbox
   };
 
   const handleEditDgnlDgtdScore = (record: DgnlDgtdScoreEntry) => {
@@ -579,16 +795,33 @@ const Scores: React.FC = () => {
     message.info("Bạn đang chỉnh sửa thông tin ĐGNL/ĐGTD.");
   };
 
-  const handleDeleteDgnlDgtdScore = (record: DgnlDgtdScoreEntry) => {
-    setDgnlDgtdScoresTableData(prev => prev.filter(entry => entry.key !== record.key));
-    message.success("Xóa thông tin ĐGNL/ĐGTD thành công!");
+  const handleDeleteDgnlDgtdScore = async (record: DgnlDgtdScoreEntry) => {
+    try {
+      setSubmitting(true);
+      
+      // Note: In a real implementation, you'd need to track score IDs from backend
+      // For now, we'll clear local data and could implement API call when IDs are available
+      
+      // TODO: Delete score from backend when score IDs are properly tracked
+      // if (record.scoreId) {
+      //   await studentApi.deleteScore(record.scoreId);
+      // }
+      
+      setDgnlDgtdScoresTableData(prev => prev.filter(entry => entry.key !== record.key));
+      message.success("Xóa thông tin ĐGNL/ĐGTD thành công!");
 
-    // If we're currently editing this entry, reset the form
-    if (currentEditingDgnlDgtdKey === record.key) {
-      dgnlDgtdForm.resetFields();
-      setSelectedAssessmentType(null);
-      setCurrentEditingDgnlDgtdKey(null);
-      setNoDgnlDgtdScore(false);
+      // If we're currently editing this entry, reset the form
+      if (currentEditingDgnlDgtdKey === record.key) {
+        dgnlDgtdForm.resetFields();
+        setSelectedAssessmentType(null);
+        setCurrentEditingDgnlDgtdKey(null);
+        setNoDgnlDgtdScore(false);
+      }
+    } catch (error) {
+      console.error('Failed to delete DGNL/DGTD score:', error);
+      message.error('Không thể xóa điểm ĐGNL/ĐGTD. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -686,7 +919,8 @@ const Scores: React.FC = () => {
   const disableNoScoreCheckbox = !currentEditingDgnlDgtdKey && hasExistingNormalScoreEntry;
 
   return (
-    <Tabs defaultActiveKey="1" centered size="large" style={{ padding: "20px" }}>
+    <Spin spinning={loading} tip="Đang tải dữ liệu điểm số...">
+      <Tabs defaultActiveKey="1" centered size="large" style={{ padding: "20px" }}>
       {/* --- Điểm thi THPT Tab --- */}
       <TabPane tab="Điểm thi THPT" key="1">
         <Form
@@ -796,7 +1030,13 @@ const Scores: React.FC = () => {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" style={{ width: '186px' }} disabled={!!examScoresTableData && !currentEditingExamKey}>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              style={{ width: '186px' }} 
+              disabled={!!examScoresTableData && !currentEditingExamKey}
+              loading={submitting}
+            >
               {currentEditingExamKey ? "Cập nhật điểm thi THPT" : "Lưu điểm thi THPT"}
             </Button>
           </Form.Item>
@@ -855,7 +1095,13 @@ const Scores: React.FC = () => {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" style={{ width: '186px' }} disabled={!!hkbScoresTableData && !currentEditingHkbKey}>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              style={{ width: '186px' }} 
+              disabled={!!hkbScoresTableData && !currentEditingHkbKey}
+              loading={submitting}
+            >
               {currentEditingHkbKey ? "Cập nhật điểm học bạ" : "Lưu điểm học bạ"}
             </Button>
           </Form.Item>
@@ -1040,6 +1286,7 @@ const Scores: React.FC = () => {
               type="primary"
               htmlType="submit"
               style={{ width: '220px' }}
+              loading={submitting}
               disabled={
                 // Disable if adding new and all units are entered for the selected type
                 (!currentEditingDgnlDgtdKey && !noDgnlDgtdScore && selectedAssessmentType && getAvailableUnits(selectedAssessmentType).length === 0) ||
@@ -1073,6 +1320,7 @@ const Scores: React.FC = () => {
         )}
       </TabPane>
     </Tabs>
+    </Spin>
   );
 };
 

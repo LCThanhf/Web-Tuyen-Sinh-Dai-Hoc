@@ -102,8 +102,8 @@ const LOCAL_STORAGE_HSG_KEY = "achievementsHSGData";
 const LOCAL_STORAGE_CERT_KEY = "achievementsCertData";
 
 const AchievementsCerts: React.FC = () => {
-  const [hsgForm] = Form.useForm<HSGAchievement>();
-  const [certForm] = Form.useForm<EnglishCert>();
+  const [hsgForm] = Form.useForm();
+  const [certForm] = Form.useForm();
 
   const [hsgRecords, setHsgRecords] = useState<HSGAchievement[]>([]);
   const [certRecords, setCertRecords] = useState<EnglishCert[]>([]);
@@ -212,10 +212,12 @@ const AchievementsCerts: React.FC = () => {
     setHsgAchievementType(record.type);
     setShowHsgFormFields(record.type !== "none");
 
-    const fileHSGList = record.fileHSG ? [{ uid: record.fileHSG, name: `fileHSG.pdf`, status: "done" }] : [];
+    const fileHSGList = record.fileHSG ? [{ uid: record.fileHSG, name: `fileHSG.pdf`, status: "done" as const }] : [];
     hsgForm.setFieldsValue({
-      ...record,
+      type: record.type,
+      monDatGiai: record.monDatGiai,
       namDatGiai: record.namDatGiai,
+      loaiGiai: record.loaiGiai,
       fileHSG: fileHSGList,
     });
   };
@@ -312,10 +314,14 @@ const AchievementsCerts: React.FC = () => {
     setShowCertFormFields(record.type !== "None");
     setShowDonViKhacInput(record.donViCap === "Khac");
 
-    const fileCertList = record.fileCert ? [{ uid: record.fileCert, name: "fileCert.pdf", status: "done" }] : [];
+    const fileCertList = record.fileCert ? [{ uid: record.fileCert, name: "fileCert.pdf", status: "done" as const }] : [];
     certForm.setFieldsValue({
-      ...record,
+      type: record.type,
+      diemThi: record.diemThi,
       ngayCap: record.ngayCap,
+      maDuThi: record.maDuThi,
+      donViCap: record.donViCap,
+      donViKhacText: record.donViKhacText,
       fileCert: fileCertList,
     });
   };
@@ -351,7 +357,7 @@ const AchievementsCerts: React.FC = () => {
     if (fileUrl) {
       window.open(fileUrl, "_blank");
     } else {
-      message.warn("Không có file minh chứng để xem.");
+      message.warning("Không có file minh chứng để xem.");
     }
   };
 

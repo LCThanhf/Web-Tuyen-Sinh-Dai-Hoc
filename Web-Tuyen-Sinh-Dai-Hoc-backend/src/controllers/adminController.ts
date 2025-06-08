@@ -5,7 +5,7 @@ import { AuthenticatedRequest } from '../types';
 const prisma = new PrismaClient();
 
 export class AdminController {
-  // School Management
+  // School Management lol
   static async createSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { name, code, totalQuota, admissionMethods } = req.body;

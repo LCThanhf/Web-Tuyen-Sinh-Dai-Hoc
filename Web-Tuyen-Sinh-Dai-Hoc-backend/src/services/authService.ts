@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { RegisterRequest, LoginRequest, JWTPayload } from '../types';
 
 const prisma = new PrismaClient();
@@ -32,7 +32,7 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(data.password, saltRounds);
 
       // Determine role based on CCCD (admin if starts with 9)
-      const role: UserRole = data.cccd.startsWith('9') ? 'ADMIN' : 'STUDENT';
+      const role = data.cccd.startsWith('9') ? 'ADMIN' : 'STUDENT';
 
       // Create user
       const user = await prisma.user.create({

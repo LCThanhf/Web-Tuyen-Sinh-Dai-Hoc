@@ -38,7 +38,6 @@ async function seedApplicationData() {
           isActive: true,
         },
       ],
-      skipDuplicates: true,
     });
 
     console.log('✅ Schools created');
@@ -79,7 +78,6 @@ async function seedApplicationData() {
           isActive: true,
         },
       ],
-      skipDuplicates: true,
     });
 
     // Create Majors for NEU
@@ -110,7 +108,6 @@ async function seedApplicationData() {
           isActive: true,
         },
       ],
-      skipDuplicates: true,
     });
 
     // Create Majors for VNU
@@ -133,7 +130,7 @@ async function seedApplicationData() {
           isActive: true,
         },
       ],
-      skipDuplicates: true,
+
     });
 
     // Create Majors for HMU
@@ -156,7 +153,7 @@ async function seedApplicationData() {
           isActive: true,
         },
       ],
-      skipDuplicates: true,
+
     });
 
     console.log('✅ Majors created');
@@ -190,7 +187,7 @@ async function seedApplicationData() {
           subjects: ['Toán', 'Hóa', 'Sinh'],
         },
       ],
-      skipDuplicates: true,
+
     });
 
     console.log('✅ Admission combinations created');
@@ -228,7 +225,7 @@ async function seedApplicationData() {
         // HMU - Y khoa accepts B00
         { majorId: '660e8400-e29b-41d4-a716-446655440010', combinationId: '770e8400-e29b-41d4-a716-446655440005' },
       ],
-      skipDuplicates: true,
+
     });
 
     console.log('✅ Major-combination relationships created');
@@ -254,7 +251,7 @@ async function seedApplicationData() {
         { schoolId: '550e8400-e29b-41d4-a716-446655440004', name: 'Điểm THPT', percentage: 90 },
         { schoolId: '550e8400-e29b-41d4-a716-446655440004', name: 'Học bạ', percentage: 10 },
       ],
-      skipDuplicates: true,
+
     });
 
     console.log('✅ Admission methods created');

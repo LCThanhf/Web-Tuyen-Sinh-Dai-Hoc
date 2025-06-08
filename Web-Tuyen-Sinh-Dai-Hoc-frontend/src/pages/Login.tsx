@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Checkbox, message } from "antd";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { authApi } from "../services/authApi";
 
 interface LoginProps {
   onLogin: (role: string, userData: any) => void;
@@ -9,16 +10,17 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/api/auth/login", {
+      const response = await authApi.login({
         cccd: values.cccd,
         password: values.password
       });
 
-      const { user, token } = response.data.data;
+      const { user, token } = response;
       
       // Store token and user data in localStorage
       localStorage.setItem("token", token);
@@ -29,6 +31,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       // Call parent login handler with role
       const role = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? 'admin' : 'student';
       onLogin(role, user);
+      
+      // Navigate to appropriate dashboard
+      const redirectPath = role === 'admin' ? '/admin' : '/student/dashboard';
+      navigate(redirectPath, { replace: true });
       
     } catch (error: any) {
       console.error("Login error:", error);
