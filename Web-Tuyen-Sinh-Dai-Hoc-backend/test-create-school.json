@@ -1,0 +1,15 @@
+{
+  "name": "Đại học Công nghệ thông tin",
+  "code": "UIT",
+  "totalQuota": 2000,
+  "admissionMethods": [
+    {
+      "name": "Điểm THPT",
+      "percentage": 80
+    },
+    {
+      "name": "Học bạ",
+      "percentage": 20
+    }
+  ]
+}
