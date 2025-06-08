@@ -40,7 +40,7 @@ export class ResultsController {
         });
         return;
       }      const student = await prisma.student.findUnique({
-        where: { id: studentId },
+        where: { userId: studentId },
         include: {
           user: {
             select: {
@@ -121,22 +121,37 @@ export class ResultsController {
       });
 
       // Determine overall status
-      let overallStatus: 'ADMITTED' | 'WAITLISTED' | 'REJECTED' | 'PENDING';
+      let overallStatus: string;
       const hasApproved = applicationResults.some(app => app.status === 'APPROVED');
       const hasPending = applicationResults.some(app => app.status === 'PENDING');
       
       if (hasApproved) {
-        overallStatus = 'ADMITTED';
+        overallStatus = 'Trúng tuyển';
       } else if (hasPending) {
-        overallStatus = 'PENDING';
+        overallStatus = 'Chờ kết quả';
       } else {
-        overallStatus = 'REJECTED';
-      }      const result: StudentResult = {
-        studentId: student.id,
+        overallStatus = 'Chưa trúng tuyển';
+      }
+
+      // Transform applications to match the expected format
+      const transformedApplications = applicationResults.map(app => ({
+        majorName: app.majorName,
+        schoolName: app.schoolName,
+        priorityOrder: app.priorityOrder,
+        status: app.status,
+        cutoffScore: app.cutoffScore,
+        studentScore: studentTotalScore > 0 ? studentTotalScore : undefined,
+        isAboveCutoff: app.cutoffScore && studentTotalScore > 0 
+          ? studentTotalScore >= app.cutoffScore 
+          : undefined
+      }));
+
+      const result = {
         cccd: student.user.cccd,
         fullName: student.user.fullName,
         overallStatus,
-        applications: applicationResults
+        applications: transformedApplications,
+        totalScore: studentTotalScore > 0 ? studentTotalScore : undefined
       };
 
       res.json({

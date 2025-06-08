@@ -1,113 +1,10 @@
 import React, { useState } from "react";
 import { Input, Button, Typography, Card, message, Alert, Spin } from "antd";
 import { LoadingOutlined } from '@ant-design/icons';
-import type { KetQua, Nguyenvong } from "../../types/result";
+import type { KetQua } from "../../types/result";
+import { ResultsService } from "../../services/resultsService";
 
 const { Title, Text } = Typography;
-
-// Dữ liệu kết quả mẫu mô phỏng các trường hợp thực tế
-const sampleResults: KetQua[] = [
-  {
-    cccd: "111111111", // TRÚNG TUYỂN NV1
-    fullName: "Nguyễn Văn A",
-    trangThaiKetQuaTongThe: "Trúng tuyển NV1",
-    nguyenvongDetails: [
-      {
-        maNguyenvong: "NV1",
-        tenNganh: "Công nghệ thông tin",
-        tenTruong: "Đại học Bách Khoa Hà Nội",
-        diemChuan: 26.0,
-        diemDat: 27.5,
-        phuongThucXetTuyen: "Điểm thi THPT", // DỮ LIỆU MẪU
-        trangThai: "Trúng tuyển",
-        ghiChu: "Bạn đã trúng tuyển nguyện vọng 1 và được ưu tiên xét tuyển."
-      },
-      {
-        maNguyenvong: "NV2",
-        tenNganh: "Khoa học máy tính",
-        tenTruong: "Đại học Công nghệ - ĐHQGHN",
-        diemChuan: 25.5,
-        diemDat: 26.0,
-        phuongThucXetTuyen: "Đánh giá năng lực ĐHQGHN", // DỮ LIỆU MẪU
-        trangThai: "Đủ điều kiện xét tuyển", // Trạng thái này sẽ được xử lý lại bằng logic bên dưới
-      },
-      {
-        maNguyenvong: "NV3",
-        tenNganh: "An toàn thông tin",
-        tenTruong: "Học viện Kỹ thuật Mật mã",
-        diemChuan: 24.0,
-        diemDat: 25.0,
-        phuongThucXetTuyen: "Học bạ THPT", // DỮ LIỆU MẪU
-        trangThai: "Đủ điều kiện xét tuyển", // Trạng thái này sẽ được xử lý lại bằng logic bên dưới
-      }
-    ],
-  },
-  {
-    cccd: "222222222", // TRÚNG TUYỂN CÁC NV SAU (ở đây là NV2)
-    fullName: "Trần Thị B",
-    trangThaiKetQuaTongThe: "Trúng tuyển các NV sau",
-    nguyenvongDetails: [
-      {
-        maNguyenvong: "NV1",
-        tenNganh: "Kinh tế đối ngoại",
-        tenTruong: "Đại học Ngoại Thương",
-        diemChuan: 27.0,
-        diemDat: 26.5,
-        phuongThucXetTuyen: "Điểm thi THPT", // DỮ LIỆU MẪU
-        trangThai: "Không trúng tuyển",
-      },
-      {
-        maNguyenvong: "NV2",
-        tenNganh: "Kinh tế quốc tế",
-        tenTruong: "Đại học Kinh Tế Quốc Dân",
-        diemChuan: 25.0,
-        diemDat: 25.5,
-        phuongThucXetTuyen: "Học bạ THPT", // DỮ LIỆU MẪU
-        trangThai: "Trúng tuyển", // Trúng tuyển ở đây
-      },
-      {
-        maNguyenvong: "NV3",
-        tenNganh: "Marketing",
-        tenTruong: "Đại học Thương Mại",
-        diemChuan: 24.5,
-        diemDat: 25.0,
-        phuongThucXetTuyen: "Điểm thi THPT", // DỮ LIỆU MẪU
-        trangThai: "Đủ điều kiện xét tuyển", // Trạng thái này sẽ được xử lý lại
-      }
-    ],
-  },
-  {
-    cccd: "333333333", // KHÔNG TRÚNG TUYỂN NGUYỆN VỌNG NÀO
-    fullName: "Lê Văn C",
-    trangThaiKetQuaTongThe: "Không trúng tuyển",
-    nguyenvongDetails: [
-      {
-        maNguyenvong: "NV1",
-        tenNganh: "Luật Kinh tế",
-        tenTruong: "Đại học Luật Hà Nội",
-        diemChuan: 24.0,
-        diemDat: 23.5,
-        phuongThucXetTuyen: "Điểm thi THPT", // DỮ LIỆU MẪU
-        trangThai: "Không trúng tuyển",
-      },
-      {
-        maNguyenvong: "NV2",
-        tenNganh: "Quản trị kinh doanh",
-        tenTruong: "Học viện Tài chính",
-        diemChuan: 25.0,
-        diemDat: 24.0,
-        phuongThucXetTuyen: "Học bạ THPT", // DỮ LIỆU MẪU
-        trangThai: "Không trúng tuyển",
-      }
-    ],
-  },
-  {
-    cccd: "444444444", // CHƯA CÓ KẾT QUẢ
-    fullName: "Phạm Thu D",
-    trangThaiKetQuaTongThe: "Chưa có kết quả",
-    nguyenvongDetails: [], // Không có chi tiết nguyện vọng nếu chưa có kết quả
-  },
-];
 
 const Results: React.FC = () => {
   const [searchValue, setSearchValue] = useState("");
@@ -116,33 +13,41 @@ const Results: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const processResults = (foundResult: KetQua): KetQua => {
-    // Tạo một bản sao để không làm thay đổi dữ liệu gốc
+    // The ResultsService already handles the logic for determining status
+    // based on priority order, so we can use the data as-is
     const processedResult = { ...foundResult };
+    
     if (processedResult.nguyenvongDetails) {
       let hasAdmittedNV = false;
       let admittedNV = "";
 
-      // Duyệt qua từng nguyện vọng
+      // Sort by priority order first
+      processedResult.nguyenvongDetails.sort((a, b) => a.priorityOrder - b.priorityOrder);
+
+      // Process each application
       processedResult.nguyenvongDetails = processedResult.nguyenvongDetails.map(nv => {
-        const newNv = { ...nv }; // Tạo bản sao của từng nguyện vọng
+        const newNv = { ...nv };
 
         if (hasAdmittedNV) {
-          // Nếu đã trúng tuyển ở nguyện vọng trước đó
-          newNv.trangThai = "Không trúng tuyển";
-          newNv.ghiChu = `Bạn đã trúng tuyển nguyện vọng ${admittedNV}.`;
+          // If already admitted to a higher priority choice, mark others as not admitted
+          if (newNv.trangThai !== "Trúng tuyển") {
+            newNv.trangThai = "Không trúng tuyển";
+            newNv.ghiChu = `Bạn đã trúng tuyển nguyện vọng ${admittedNV}.`;
+          }
         } else if (newNv.trangThai === "Trúng tuyển") {
-          // Nếu đây là nguyện vọng trúng tuyển đầu tiên
+          // Mark this as the admitted choice
           hasAdmittedNV = true;
           admittedNV = newNv.maNguyenvong;
-          // Ghi chú có thể được giữ nguyên hoặc điều chỉnh tùy theo bạn muốn
         }
+
         return newNv;
       });
     }
+    
     return processedResult;
   };
 
-  const onSearch = () => {
+  const onSearch = async () => {
     setError("");
     setResult(null);
     setLoading(true);
@@ -153,19 +58,14 @@ const Results: React.FC = () => {
       return;
     }
 
-    setTimeout(() => {
-      const found = sampleResults.find(
-        (r) => r.cccd === searchValue.trim()
-      );
-
-      if (found) {
-        // Xử lý lại trạng thái nguyện vọng trước khi hiển thị
-        setResult(processResults(found));
-      } else {
-        setError("Không tìm thấy kết quả phù hợp với CCCD này. Vui lòng kiểm tra lại thông tin.");
-      }
+    try {
+      const resultData = await ResultsService.checkResultsByCCCD(searchValue.trim());
+      setResult(processResults(resultData));
+    } catch (error: any) {
+      setError(error.message || "Có lỗi xảy ra khi tra cứu kết quả. Vui lòng thử lại sau.");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const getStatusColor = (status: KetQua['trangThaiKetQuaTongThe']): "success" | "warning" | "danger" | "secondary" | undefined => {
@@ -248,15 +148,24 @@ const Results: React.FC = () => {
               {result.nguyenvongDetails.map((nv, index) => (
                 <Card key={index} size="small" style={{ marginBottom: 15, borderColor: nv.trangThai === "Trúng tuyển" ? "#52c41a" : (nv.trangThai === "Đủ điều kiện xét tuyển" ? "#faad14" : "#ff4d4f") }}>
                   <p><b>{nv.maNguyenvong}:</b> {nv.tenNganh} - {nv.tenTruong}</p>
-                  <p><b>Điểm chuẩn:</b> {nv.diemChuan}</p>
-                  <p><b>Điểm đạt:</b> {nv.diemDat}</p>
-                  <p><b>Phương thức xét tuyển:</b> {nv.phuongThucXetTuyen}</p> {/* HIỂN THỊ TRƯỜNG NÀY */}
+                  {nv.diemChuan && <p><b>Điểm chuẩn:</b> {nv.diemChuan}</p>}
+                  {nv.diemDat && <p><b>Điểm đạt:</b> {nv.diemDat}</p>}
+                  {result.totalScore && <p><b>Tổng điểm của bạn:</b> {result.totalScore.toFixed(2)}</p>}
+                  {nv.phuongThucXetTuyen && <p><b>Phương thức xét tuyển:</b> {nv.phuongThucXetTuyen}</p>}
                   <p>
                     <b>Trạng thái:</b>{" "}
                     <Text strong type={nv.trangThai === "Trúng tuyển" ? "success" : (nv.trangThai === "Đủ điều kiện xét tuyển" ? "warning" : "danger")}>
                       {nv.trangThai}
                     </Text>
                   </p>
+                  {nv.isAboveCutoff !== undefined && nv.diemChuan && nv.diemDat && (
+                    <p>
+                      <b>So với điểm chuẩn:</b>{" "}
+                      <Text type={nv.isAboveCutoff ? "success" : "danger"}>
+                        {nv.isAboveCutoff ? "Đạt điểm chuẩn" : "Chưa đạt điểm chuẩn"}
+                      </Text>
+                    </p>
+                  )}
                   {nv.ghiChu && <Text type="secondary" italic>{nv.ghiChu}</Text>}
                 </Card>
               ))}

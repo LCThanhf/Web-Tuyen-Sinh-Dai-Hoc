@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@types/node": "^22.15.29"
+    "@types/node": "^22.15.29",
+    "node-fetch": "^3.3.2"
   }
 }
