@@ -16,7 +16,7 @@ import PersonalInfo from "./pages/user/InfoRegistration/Personal";
 import InfoPriority from "./pages/user/InfoRegistration/Priority";
 import Scores from "./pages/user/InfoRegistration/Scores";
 import AchievementsCerts from "./pages/user/InfoRegistration/Achievements";
-import StudentProfilePage from "./pages/user/StudentProfilePage";
+import Profile from "./pages/user/Profile";
 
 // IMPORT CÁC TRANG ADMIN
 import AdminHomePage from "./pages/admin/AdminHomePage";
@@ -138,7 +138,7 @@ const App: React.FC = () => {
           <Route path="register-nguyenvong" element={<RegisterNguyenVong />} />
           <Route path="status" element={<Status />} />
           <Route path="results" element={<Results />} />
-          <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         <Route
