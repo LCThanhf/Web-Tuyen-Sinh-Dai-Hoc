@@ -1,0 +1,148 @@
+// Student API service - comprehensive service for all student-related operations
+import { apiClient } from '../../services/api';
+import type { ApiResponse } from '../../services/api';
+
+// Types for student data
+export interface PersonalInfo {
+  id?: string;
+  fullName: string;
+  dateOfBirth: string;
+  gender: 'MALE' | 'FEMALE';
+  ethnicity: string;
+  religion?: string;
+  cccd: string;
+  cccdIssueDate: string;
+  cccdIssuePlace: string;
+  permanentAddress: string;
+  currentAddress: string;
+  guardianName: string;
+  guardianPhone: string;
+  guardianRelation: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
+
+export interface Score {
+  id?: string;
+  examType: 'THPT' | 'DGNL' | 'COMPETENCY';
+  subject: string;
+  score: number;
+  year: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
+
+export interface Priority {
+  id?: string;
+  type: 'AREA' | 'OBJECT' | 'FAMILY';
+  value: string;
+  description?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
+
+export interface Achievement {
+  id?: string;
+  name: string;
+  type: 'ACADEMIC' | 'SPORTS' | 'ARTS' | 'OTHER';
+  level: 'DISTRICT' | 'PROVINCE' | 'NATIONAL' | 'INTERNATIONAL';
+  year: number;
+  organization: string;
+  description?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
+
+export interface Certificate {
+  id?: string;
+  name: string;
+  type: 'LANGUAGE' | 'IT' | 'PROFESSIONAL' | 'OTHER';
+  level?: string;
+  issueDate: string;
+  issueOrganization: string;
+  expiryDate?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
+
+export const studentApi = {
+  // Personal Information
+  getPersonalInfo: async (): Promise<PersonalInfo | null> => {
+    const response = await apiClient.get<ApiResponse<PersonalInfo>>('/student/personal-info');
+    return response.data.data;
+  },
+
+  updatePersonalInfo: async (data: Partial<PersonalInfo>): Promise<PersonalInfo> => {
+    const response = await apiClient.put<ApiResponse<PersonalInfo>>('/student/personal-info', data);
+    return response.data.data;
+  },
+
+  deletePersonalInfo: async (): Promise<{ message: string }> => {
+    const response = await apiClient.delete<ApiResponse<{ message: string }>>('/student/personal-info');
+    return response.data;
+  },
+
+  // Scores
+  getScores: async (): Promise<Score[]> => {
+    const response = await apiClient.get<ApiResponse<Score[]>>('/student/scores');
+    return response.data.data;
+  },
+
+  saveScore: async (data: Partial<Score>): Promise<Score> => {
+    const response = await apiClient.post<ApiResponse<Score>>('/student/scores', data);
+    return response.data.data;
+  },
+
+  deleteScore: async (id: string): Promise<{ message: string }> => {
+    const response = await apiClient.delete<ApiResponse<{ message: string }>>(`/student/scores/${id}`);
+    return response.data;
+  },
+
+  // Priority
+  getPriority: async (): Promise<Priority | null> => {
+    const response = await apiClient.get<ApiResponse<Priority>>('/student/priority');
+    return response.data.data;
+  },
+
+  updatePriority: async (data: Partial<Priority>): Promise<Priority> => {
+    const response = await apiClient.put<ApiResponse<Priority>>('/student/priority', data);
+    return response.data.data;
+  },
+
+  deletePriority: async (): Promise<{ message: string }> => {
+    const response = await apiClient.delete<ApiResponse<{ message: string }>>('/student/priority');
+    return response.data;
+  },
+
+  // Achievement
+  getAchievement: async (): Promise<Achievement | null> => {
+    const response = await apiClient.get<ApiResponse<Achievement>>('/student/achievement');
+    return response.data.data;
+  },
+
+  updateAchievement: async (data: Partial<Achievement>): Promise<Achievement> => {
+    const response = await apiClient.put<ApiResponse<Achievement>>('/student/achievement', data);
+    return response.data.data;
+  },
+
+  deleteAchievement: async (): Promise<{ message: string }> => {
+    const response = await apiClient.delete<ApiResponse<{ message: string }>>('/student/achievement');
+    return response.data;
+  },
+
+  // Certificate
+  getCertificate: async (): Promise<Certificate | null> => {
+    const response = await apiClient.get<ApiResponse<Certificate>>('/student/certificate');
+    return response.data.data;
+  },
+
+  updateCertificate: async (data: Partial<Certificate>): Promise<Certificate> => {
+    const response = await apiClient.put<ApiResponse<Certificate>>('/student/certificate', data);
+    return response.data.data;
+  },
+
+  deleteCertificate: async (): Promise<{ message: string }> => {
+    const response = await apiClient.delete<ApiResponse<{ message: string }>>('/student/certificate');
+    return response.data;
+  },
+};

@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  cccd        String   @unique
+  fullName    String
+  email       String   @unique
+  phone       String
+  password    String
+  role        UserRole @default(STUDENT)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Student specific data
+  student Student?
+  reportLogs ReportLog[]
+
+  @@map("users")
+}
+
+model Student {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  dob              DateTime?
+  gender           Gender?
+  cccdIssuePlace   String?
+  cccdIssueDate    DateTime?
+  address          String?
+  city             String?
+  district         String?
+  highSchoolName   String?
+  graduationYear   Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalInfo     PersonalInfo?
+  scores           Score[]
+  priorities       Priority[]
+  achievements     Achievement[]
+  certificates     Certificate[]
+  applications     Application[]
+
+  @@map("students")
+}
+
+model PersonalInfo {
+  id                String          @id @default(uuid())
+  studentId         String          @unique
+  cccdFrontFile     String?
+  cccdBackFile      String?
+  status            ApprovalStatus  @default(PENDING)
+  adminNote         String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  student           Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("personal_infos")
+}
+
+model School {
+  id                String              @id @default(uuid())
+  name              String              
+  code              String              @unique
+  totalQuota        Int                 @default(0)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  majors            Major[]
+  admissionMethods  AdmissionMethod[]
+  applications      Application[]
+
+  @@map("schools")
+}
+
+model AdmissionMethod {
+  id          String   @id @default(uuid())
+  schoolId    String
+  name        String
+  percentage  Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("admission_methods")
+}
+
+model Major {
+  id          String   @id @default(uuid())
+  schoolId    String
+  name        String
+  code        String   @unique
+  quota       Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school              School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  combinations        MajorCombination[]
+  applications        Application[]
+
+  @@map("majors")
+}
+
+model AdmissionCombination {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  subjects  Json     // Array of subjects
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  majors    MajorCombination[]
+
+  @@map("admission_combinations")
+}
+
+model MajorCombination {
+  majorId       String
+  combinationId String
+  createdAt     DateTime @default(now())
+
+  major         Major                 @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  combination   AdmissionCombination  @relation(fields: [combinationId], references: [id], onDelete: Cascade)
+
+  @@id([majorId, combinationId])
+  @@map("major_combinations")
+}
+
+model Score {
+  id            String         @id @default(uuid())
+  studentId     String
+  type          ScoreType
+  examNumber    String?
+  examBan       String?        // "natural", "social", "general"
+  scores        Json           // Subject scores object
+  subjectAverages Json?        // For transcript scores
+  averageOverall Float?        // Overall average for transcript
+  assessmentType String?       // "ĐGNL", "ĐGTD" for assessment scores
+  assessmentUnit String?       // Assessment organizing unit
+  assessmentScore Float?       // Assessment score
+  noScoreDeclared Boolean?     // For "no score" declarations
+  files         Json?          // Array of file paths
+  status        ApprovalStatus @default(PENDING)
+  adminNote     String?
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+}
+
+model Priority {
+  id              String         @id @default(uuid())
+  studentId       String         @unique
+  priorityArea    String
+  priorityObject  String
+  areaFile        String?
+  objectFile      String?
+  status          ApprovalStatus @default(PENDING)
+  adminNote       String?
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("priorities")
+}
+
+model Achievement {
+  id            String         @id @default(uuid())
+  studentId     String         @unique
+  type          String         // "tinh", "quocGia", "none"
+  subject       String?
+  year          String?
+  level         String?        // "Nhat", "Nhi", "Ba", "KhuyenKhich"
+  file          String?
+  status        ApprovalStatus @default(PENDING)
+  adminNote     String?
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("achievements")
+}
+
+model Certificate {
+  id              String         @id @default(uuid())
+  studentId       String         @unique
+  type            String         // "IELTS", "TOEFL iBT", etc.
+  score           Float?
+  issueDate       String?
+  testCode        String?
+  issuer          String?
+  issuerOther     String?
+  file            String?
+  status          ApprovalStatus @default(PENDING)
+  adminNote       String?
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("certificates")
+}
+
+model Application {
+  id                String            @id @default(uuid())
+  studentId         String
+  schoolId          String
+  majorId           String
+  combinationId     String?
+  admissionMethod   String
+  organizingUnit    String?
+  priorityOrder     Int
+  submissionDate    DateTime          @default(now())
+  status            ApplicationStatus @default(PENDING)
+  adminNote         String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school            School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  major             Major             @relation(fields: [majorId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, schoolId, majorId])
+  @@map("applications")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  type      String   // e.g. 'string', 'number', 'json', 'boolean'
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model ReportLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String   // e.g. 'EXPORT', 'SCHEDULE', 'VIEW', 'ERROR'
+  details   String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+enum UserRole {
+  STUDENT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ScoreType {
+  THPT
+  TRANSCRIPT
+  ASSESSMENT
+}

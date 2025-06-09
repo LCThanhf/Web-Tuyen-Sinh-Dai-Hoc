@@ -1,0 +1,7 @@
+{
+  "name": "Khoa học máy tính",
+  "code": "KHMT",
+  "schoolId": "2ea1632b-c848-4aee-bd9a-ebe6f882e597",
+  "quota": 300,
+  "admissionCombinationIds": ["770e8400-e29b-41d4-a716-446655440001", "61fe847d-e7e5-4a57-b133-760b1d5a1291"]
+}
