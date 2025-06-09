@@ -214,7 +214,7 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
 
   // Get columns for table based on document type
   const getColumns = () => {
-    const baseColumns: any[] = [
+    const baseColumns = [
       {
         title: 'Họ tên thí sinh',
         dataIndex: ['student', 'user', 'fullName'],
@@ -266,7 +266,7 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
       baseColumns.splice(4, 0, {
         title: 'Khu vực/Đối tượng',
         key: 'priorityInfo',
-        render: (_: any, record: any) => (
+        render: (text: any, record: any) => (
           <div>
             {record.priorityArea && <div>KV: {record.priorityArea}</div>}
             {record.priorityObject && <div>ĐT: {record.priorityObject}</div>}
@@ -296,8 +296,9 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
     // Add action column
     baseColumns.push({
       title: 'Thao tác',
+      dataIndex: 'actions',
       key: 'actions',
-      render: (_: any, record: any) => (
+      render: (_, record: any) => (
         <Space>
           <Button
             type="link"
