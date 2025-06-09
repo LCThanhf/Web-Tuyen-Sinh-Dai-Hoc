@@ -1,106 +1,104 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, Space, Popconfirm, message, Select, InputNumber } from 'antd';
+import { Table, Button, Modal, Form, Input, Space, Popconfirm, message, Select, InputNumber, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { adminApi } from '../../services/adminApi';
 
 const { Option } = Select;
 
-// Định nghĩa kiểu dữ liệu cho một trường học (để dùng cho Select và hiển thị)
+// Local interfaces that map AdminMajor to UI-friendly format
+interface Major {
+  id: string;
+  name: string;
+  code: string;
+  schoolId: string;
+  quota: number;
+  isActive: boolean;
+  school: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  combinations: Array<{
+    combination: {
+      id: string;
+      name: string;
+      subjects: string[];
+    };
+  }>;
+  _count: {
+    applications: number;
+  };
+}
+
 interface School {
   id: string;
   name: string;
   code: string;
 }
 
-// Định nghĩa kiểu dữ liệu cho một tổ hợp xét tuyển (chỉ để hiển thị tên)
 interface AdmissionCombination {
   id: string;
-  name: string; // Ví dụ: A00, A01, D01
-}
-
-// Định nghĩa kiểu dữ liệu cho một ngành
-interface Major {
-  id: string;
   name: string;
-  code: string; // Mã ngành, sinh tự động, duy nhất
-  schoolId: string; // ID của trường mà ngành này thuộc về
-  quota: number; // Chỉ tiêu của ngành
-  admissionCombinationIds: string[]; // Danh sách các ID của tổ hợp xét tuyển
+  subjects: string[];
 }
 
 const ManageMajorsPage: React.FC = () => {
   const [majors, setMajors] = useState<Major[]>([]);
-  const [schools, setSchools] = useState<School[]>([]); // Danh sách các trường
-  const [allAdmissionCombinations, setAllAdmissionCombinations] = useState<AdmissionCombination[]>([]); // Toàn bộ tổ hợp để mapping
+  const [schools, setSchools] = useState<School[]>([]);
+  const [allAdmissionCombinations, setAllAdmissionCombinations] = useState<AdmissionCombination[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingMajor, setEditingMajor] = useState<Major | null>(null);
   const [form] = Form.useForm();
   const [searchText, setSearchText] = useState('');
   const [selectedSchoolFilter, setSelectedSchoolFilter] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
 
-  // Giả lập dữ liệu trường, ngành và tổ hợp xét tuyển
+  // Fetch data from backend
+  const fetchMajors = async () => {
+    try {
+      setLoading(true);
+      const majorsData = await adminApi.getMajors();
+      setMajors(majorsData);
+    } catch (error) {
+      console.error('Error fetching majors:', error);
+      message.error('Không thể tải danh sách ngành. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSchools = async () => {
+    try {
+      const schoolsData = await adminApi.getSchools();
+      setSchools(schoolsData);
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+      message.error('Không thể tải danh sách trường. Vui lòng thử lại!');
+    }
+  };
+
+  const fetchCombinations = async () => {
+    try {
+      const combinationsData = await adminApi.getCombinations();
+      setAllAdmissionCombinations(combinationsData);
+    } catch (error) {
+      console.error('Error fetching combinations:', error);
+      message.error('Không thể tải danh sách tổ hợp xét tuyển. Vui lòng thử lại!');
+    }
+  };
+
   useEffect(() => {
-    // Giả lập lấy danh sách trường từ API
-    const dummySchools: School[] = [
-      { id: '1', name: 'Đại học Bách Khoa Hà Nội', code: 'BKA' },
-      { id: '2', name: 'Đại học Quốc gia Hà Nội', code: 'QGHN' },
-      { id: '3', name: 'Đại học Ngoại Thương', code: 'NT' },
-    ];
-    setSchools(dummySchools);
-
-    // Giả lập lấy danh sách tổ hợp xét tuyển từ API
-    const dummyAdmissionCombinations: AdmissionCombination[] = [
-      { id: 'cb1', name: 'A00' }, // Toán, Lý, Hóa
-      { id: 'cb2', name: 'A01' }, // Toán, Lý, Anh
-      { id: 'cb3', name: 'D01' }, // Toán, Văn, Anh
-      { id: 'cb4', name: 'D07' }, // Toán, Hóa, Anh
-    ];
-    setAllAdmissionCombinations(dummyAdmissionCombinations);
-
-    // Giả lập lấy danh sách ngành từ API
-    const dummyMajors: Major[] = [
-      {
-        id: '101',
-        name: 'Khoa học Máy tính',
-        code: 'KHMTCB-001',
-        schoolId: '1',
-        quota: 1500,
-        admissionCombinationIds: ['cb1', 'cb2'],
-      },
-      {
-        id: '102',
-        name: 'Kỹ thuật Điện tử Viễn thông',
-        code: 'KTDTVT-002',
-        schoolId: '1',
-        quota: 1000,
-        admissionCombinationIds: ['cb1', 'cb2', 'cb3'],
-      },
-      {
-        id: '201',
-        name: 'Kinh tế Quốc tế',
-        code: 'KTQT-003',
-        schoolId: '3',
-        quota: 800,
-        admissionCombinationIds: ['cb1', 'cb2', 'cb3', 'cb4'],
-      },
-      {
-        id: '202',
-        name: 'Quản trị Kinh doanh',
-        code: 'QTKD-004',
-        schoolId: '3',
-        quota: 700,
-        admissionCombinationIds: ['cb1', 'cb3'],
-      },
-    ];
-    setMajors(dummyMajors);
+    fetchMajors();
+    fetchSchools();
+    fetchCombinations();
   }, []);
 
-  // Hàm sinh mã ngành tự động duy nhất
+  // Generate unique major code
   const generateUniqueMajorCode = (existingMajors: Major[]): string => {
     const prefix = 'NGANH-';
     let newCode: string;
     let isUnique = false;
     do {
-      // Số ngẫu nhiên từ 1000 đến 9999
       const randomNum = Math.floor(1000 + Math.random() * 9000);
       newCode = `${prefix}${randomNum}`;
       isUnique = !existingMajors.some(major => major.code === newCode);
@@ -108,87 +106,95 @@ const ManageMajorsPage: React.FC = () => {
     return newCode;
   };
 
-  // Mở modal thêm ngành
+  // Open add major modal
   const handleAddMajor = () => {
     setEditingMajor(null);
     form.resetFields();
-    // Sinh mã ngành tự động và gán vào form
-    form.setFieldsValue({ code: generateUniqueMajorCode(majors), admissionCombinationIds: [] });
+    form.setFieldsValue({ 
+      code: generateUniqueMajorCode(majors), 
+      admissionCombinationIds: [] 
+    });
     setIsModalVisible(true);
   };
 
-  // Mở modal sửa ngành
+  // Open edit major modal
   const handleEditMajor = (record: Major) => {
     setEditingMajor(record);
-    // Gán giá trị hiện tại của ngành vào form
-    form.setFieldsValue(record);
+    // Convert combinations array to IDs for form
+    const combinationIds = record.combinations.map(c => c.combination.id);
+    form.setFieldsValue({
+      ...record,
+      admissionCombinationIds: combinationIds
+    });
     setIsModalVisible(true);
   };
 
-  // Xóa ngành
-  const handleDeleteMajor = (id: string) => {
-    // Thực hiện API call xóa ngành
-    setMajors(majors.filter(major => major.id !== id));
-    message.success('Xóa ngành thành công!');
-  };
-
-  // Xử lý khi submit form (thêm mới hoặc cập nhật)
-  const handleOk = async () => {
+  // Delete major
+  const handleDeleteMajor = async (id: string) => {
     try {
-      const values = await form.validateFields();
-      if (editingMajor) {
-        // Cập nhật ngành hiện có
-        const updatedMajors = majors.map(major =>
-          major.id === editingMajor.id
-            ? {
-                ...major,
-                name: values.name,
-                schoolId: values.schoolId,
-                quota: values.quota,
-                admissionCombinationIds: values.admissionCombinationIds || [], // Cập nhật tổ hợp xét tuyển
-              }
-            : major
-        );
-        setMajors(updatedMajors);
-        message.success('Cập nhật ngành thành công!');
-      } else {
-        // Thêm ngành mới
-        const newMajor: Major = {
-          ...values,
-          id: String(Date.now()), // ID tạm thời, thực tế sẽ do backend tạo
-          code: form.getFieldValue('code'), // Lấy mã ngành đã được sinh tự động
-          admissionCombinationIds: values.admissionCombinationIds || [], // Lấy tổ hợp xét tuyển từ form
-        };
-        setMajors([...majors, newMajor]);
-        message.success('Thêm ngành mới thành công!');
-      }
-      setIsModalVisible(false);
-    } catch (errorInfo) {
-      console.log('Validate Failed:', errorInfo);
-      message.error('Vui lòng điền đầy đủ và đúng thông tin!');
+      await adminApi.deleteMajor(id);
+      setMajors(majors.filter(major => major.id !== id));
+      message.success('Xóa ngành thành công!');
+    } catch (error: any) {
+      console.error('Error deleting major:', error);
+      message.error(error.response?.data?.message || 'Không thể xóa ngành. Vui lòng thử lại!');
     }
   };
 
-  // Hủy bỏ modal
+  // Handle form submission (add or update)
+  const handleOk = async () => {
+    try {
+      const values = await form.validateFields();
+      
+      if (editingMajor) {
+        // Update existing major
+        const updatedMajor = await adminApi.updateMajor(editingMajor.id, {
+          name: values.name,
+          code: values.code,
+          schoolId: values.schoolId,
+          quota: values.quota,
+          admissionCombinationIds: values.admissionCombinationIds || []
+        });
+        
+        setMajors(majors.map(major =>
+          major.id === editingMajor.id ? updatedMajor : major
+        ));
+        message.success('Cập nhật ngành thành công!');
+      } else {
+        // Create new major
+        const newMajor = await adminApi.createMajor({
+          name: values.name,
+          code: values.code,
+          schoolId: values.schoolId,
+          quota: values.quota,
+          admissionCombinationIds: values.admissionCombinationIds || []
+        });
+        
+        setMajors([...majors, newMajor]);
+        message.success('Thêm ngành mới thành công!');
+      }
+      
+      setIsModalVisible(false);
+    } catch (error: any) {
+      console.error('Error saving major:', error);
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại!');
+    }
+  };
+
+  // Cancel modal
   const handleCancel = () => {
     setIsModalVisible(false);
   };
 
-  // Hàm giúp lấy tên trường từ schoolId
-  const getSchoolName = (schoolId: string) => {
-    const school = schools.find(s => s.id === schoolId);
-    return school ? school.name : 'Không xác định';
-  };
-
-  // Hàm lấy tên tổ hợp từ ID
-  const getCombinationNames = (combinationIds: string[]) => {
-    if (!combinationIds || combinationIds.length === 0) return 'Chưa có';
-    return combinationIds
-      .map(id => allAdmissionCombinations.find(cb => cb.id === id)?.name || 'N/A')
+  // Get combination names from major combinations
+  const getCombinationNames = (major: Major) => {
+    if (!major.combinations || major.combinations.length === 0) return 'Chưa có';
+    return major.combinations
+      .map(c => c.combination.name)
       .join(', ');
   };
 
-  // Lọc danh sách ngành dựa trên tìm kiếm
+  // Filter majors based on search and school filter
   const filteredMajors = useMemo(() => {
     let filtered = majors;
 
@@ -201,13 +207,14 @@ const ManageMajorsPage: React.FC = () => {
         major =>
           major.name.toLowerCase().includes(searchText.toLowerCase()) ||
           major.code.toLowerCase().includes(searchText.toLowerCase()) ||
-          getSchoolName(major.schoolId).toLowerCase().includes(searchText.toLowerCase())
+          major.school.name.toLowerCase().includes(searchText.toLowerCase())
       );
     }
+    
     return filtered;
-  }, [majors, searchText, selectedSchoolFilter, schools]);
+  }, [majors, searchText, selectedSchoolFilter]);
 
-  // Định nghĩa các cột cho bảng
+  // Table columns definition
   const columns = [
     {
       title: 'Mã Ngành',
@@ -223,10 +230,9 @@ const ManageMajorsPage: React.FC = () => {
     },
     {
       title: 'Trường',
-      dataIndex: 'schoolId',
       key: 'schoolName',
-      render: (schoolId: string) => getSchoolName(schoolId), // Hiển thị tên trường thay vì ID
-      sorter: (a: Major, b: Major) => getSchoolName(a.schoolId).localeCompare(getSchoolName(b.schoolId)),
+      render: (_: any, record: Major) => record.school.name,
+      sorter: (a: Major, b: Major) => a.school.name.localeCompare(b.school.name),
     },
     {
       title: 'Chỉ tiêu',
@@ -235,15 +241,20 @@ const ManageMajorsPage: React.FC = () => {
       sorter: (a: Major, b: Major) => a.quota - b.quota,
     },
     {
+      title: 'Số đơn đăng ký',
+      key: 'applications',
+      render: (_: any, record: Major) => record._count.applications,
+      sorter: (a: Major, b: Major) => a._count.applications - b._count.applications,
+    },
+    {
       title: 'Tổ hợp xét tuyển',
-      dataIndex: 'admissionCombinationIds',
       key: 'admissionCombinations',
-      render: (ids: string[]) => getCombinationNames(ids), // Hiển thị tên tổ hợp
+      render: (_: any, record: Major) => getCombinationNames(record),
     },
     {
       title: 'Hành động',
       key: 'actions',
-      render: (text: string, record: Major) => (
+      render: (_: any, record: Major) => (
         <Space size="middle">
           <Button
             icon={<EditOutlined />}
@@ -254,6 +265,7 @@ const ManageMajorsPage: React.FC = () => {
           </Button>
           <Popconfirm
             title="Bạn có chắc chắn muốn xóa ngành này?"
+            description="Thao tác này không thể hoàn tác!"
             onConfirm={() => handleDeleteMajor(record.id)}
             okText="Có"
             cancelText="Không"
@@ -306,13 +318,20 @@ const ManageMajorsPage: React.FC = () => {
         </Button>
       </Space>
 
-      <Table
-        columns={columns}
-        dataSource={filteredMajors}
-        rowKey="id"
-        pagination={{ pageSize: 10 }}
-        bordered
-      />
+      <Spin spinning={loading}>
+        <Table
+          columns={columns}
+          dataSource={filteredMajors}
+          rowKey="id"
+          pagination={{ 
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} ngành`
+          }}
+          bordered
+        />
+      </Spin>
 
       <Modal
         title={editingMajor ? 'Chỉnh sửa Ngành' : 'Thêm Ngành Mới'}
@@ -321,12 +340,12 @@ const ManageMajorsPage: React.FC = () => {
         onCancel={handleCancel}
         okText={editingMajor ? 'Cập nhật' : 'Thêm mới'}
         cancelText="Hủy"
+        width={600}
       >
         <Form
           form={form}
           layout="vertical"
           name="major_form"
-          initialValues={editingMajor || { admissionCombinationIds: [] }} // Set default for new major
         >
           <Form.Item
             name="schoolId"
@@ -348,32 +367,38 @@ const ManageMajorsPage: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          
           <Form.Item
             name="name"
             label="Tên Ngành"
             rules={[{ required: true, message: 'Vui lòng nhập tên ngành!' }]}
           >
-            <Input />
+            <Input placeholder="Nhập tên ngành" />
           </Form.Item>
+          
           <Form.Item
             name="code"
             label="Mã Ngành"
-            // Khi thêm mới, mã ngành được sinh tự động. Khi chỉnh sửa, mã ngành không thay đổi.
-            // Do đó, luôn disable trường này.
-            // initialValue cho trường `code` được set trong `handleAddMajor` hoặc lấy từ `editingMajor`
+            rules={[{ required: true, message: 'Mã ngành là bắt buộc!' }]}
           >
-            <Input disabled />
+            <Input disabled placeholder="Mã ngành được sinh tự động" />
           </Form.Item>
+          
           <Form.Item
             name="quota"
             label="Chỉ tiêu"
             rules={[
               { required: true, message: 'Vui lòng nhập chỉ tiêu!' },
-              { type: 'number', min: 0, message: 'Chỉ tiêu phải là số không âm!' },
+              { type: 'number', min: 1, message: 'Chỉ tiêu phải lớn hơn 0!' },
             ]}
           >
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <InputNumber 
+              min={1} 
+              style={{ width: '100%' }} 
+              placeholder="Nhập chỉ tiêu ngành"
+            />
           </Form.Item>
+          
           <Form.Item
             name="admissionCombinationIds"
             label="Tổ hợp xét tuyển"
@@ -390,7 +415,7 @@ const ManageMajorsPage: React.FC = () => {
             >
               {allAdmissionCombinations.map(combo => (
                 <Option key={combo.id} value={combo.id}>
-                  {combo.name}
+                  {combo.name} ({combo.subjects.join(', ')})
                 </Option>
               ))}
             </Select>

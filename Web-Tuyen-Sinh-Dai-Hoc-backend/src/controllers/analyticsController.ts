@@ -136,6 +136,7 @@ export class AnalyticsController {
           quota: true,
           school: {
             select: {
+              id: true,
               name: true,
               code: true
             }

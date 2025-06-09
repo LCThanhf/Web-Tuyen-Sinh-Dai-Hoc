@@ -220,13 +220,13 @@ const AdminHomePage: React.FC = () => {
               <>
                 <Statistic
                   title="Tổng tài liệu"
-                  value={documentStats.summary.totalDocuments}
+                  value={documentStats.total || documentStats.summary?.totalDocuments || 0}
                   prefix={<FormOutlined />}
                 />
                 <div style={{ marginTop: 16 }}>
-                  <Text>Tỷ lệ duyệt: {documentStats.summary.overallApprovalRate}%</Text>
+                  <Text>Tỷ lệ duyệt: {documentStats.approvalRate || documentStats.summary?.overallApprovalRate || '0'}%</Text>
                   <Progress 
-                    percent={parseFloat(documentStats.summary.overallApprovalRate)}
+                    percent={parseFloat(documentStats.approvalRate || documentStats.summary?.overallApprovalRate || '0')}
                     size="small"
                     strokeColor="#1890ff"
                     style={{ marginTop: 4 }}
@@ -235,10 +235,10 @@ const AdminHomePage: React.FC = () => {
                 <div style={{ marginTop: 12 }}>
                   <Row>
                     <Col span={12}>
-                      <Text type="secondary">Chờ duyệt: {documentStats.summary.pendingDocuments}</Text>
+                      <Text type="secondary">Chờ duyệt: {documentStats.pending || documentStats.summary?.pendingDocuments || 0}</Text>
                     </Col>
                     <Col span={12}>
-                      <Text type="secondary">Đã duyệt: {documentStats.summary.approvedDocuments}</Text>
+                      <Text type="secondary">Đã duyệt: {documentStats.approved || documentStats.summary?.approvedDocuments || 0}</Text>
                     </Col>
                   </Row>
                 </div>

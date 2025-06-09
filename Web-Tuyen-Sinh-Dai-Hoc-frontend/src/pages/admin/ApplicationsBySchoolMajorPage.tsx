@@ -1,140 +1,102 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Table, Select, Space, Card, Row, Col, Typography, Spin, Tag } from 'antd';
+import { Table, Select, Space, Card, Row, Col, Typography, Spin, Tag, message } from 'antd';
 import { BookOutlined, FormOutlined, SolutionOutlined } from '@ant-design/icons';
-import { Popconfirm } from 'antd';
-
+import { analyticsApi } from '../../services/analyticsApi';
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
-// Định nghĩa kiểu dữ liệu cơ bản
-interface School {
+// Backend-integrated interface that maps to API response
+interface MajorStatistic {
   id: string;
   name: string;
   code: string;
+  quota: number;
+  school: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  totalApplications: number;
+  approvedApplications: number;
+  pendingApplications: number;
+  rejectedApplications: number;
 }
-
-interface Major {
-  id: string;
-  name: string;
-  code: string;
-  schoolId: string;
-}
-
-interface Application {
-  id: string;
-  studentName: string;
-  studentId: string;
-  majorId: string;
-  schoolId: string;
-  status: 'Chờ duyệt' | 'Đã duyệt' | 'Từ chối';
-  submissionDate: string; // Ngày nộp
-}
-
-// Giả lập dữ liệu trạng thái hồ sơ
-const dummyApplications: Application[] = [
-  { id: 'app001', studentName: 'Nguyễn Văn A', studentId: 'S001', majorId: '101', schoolId: '1', status: 'Đã duyệt', submissionDate: '2024-05-10' },
-  { id: 'app002', studentName: 'Trần Thị B', studentId: 'S002', majorId: '101', schoolId: '1', status: 'Chờ duyệt', submissionDate: '2024-05-11' },
-  { id: 'app003', studentName: 'Lê Văn C', studentId: 'S003', majorId: '102', schoolId: '1', status: 'Đã duyệt', submissionDate: '2024-05-12' },
-  { id: 'app004', studentName: 'Phạm Thị D', studentId: 'S004', majorId: '201', schoolId: '3', status: 'Chờ duyệt', submissionDate: '2024-05-13' },
-  { id: 'app005', studentName: 'Hoàng Văn E', studentId: 'S005', majorId: '201', schoolId: '3', status: 'Từ chối', submissionDate: '2024-05-14' },
-  { id: 'app006', studentName: 'Nguyễn Thị F', studentId: 'S006', majorId: '101', schoolId: '1', status: 'Đã duyệt', submissionDate: '2024-05-15' },
-  { id: 'app007', studentName: 'Đặng Văn G', studentId: 'S007', majorId: '103', schoolId: '2', status: 'Chờ duyệt', submissionDate: '2024-05-16' },
-  { id: 'app008', studentName: 'Bùi Thị H', studentId: 'S008', majorId: '103', schoolId: '2', status: 'Đã duyệt', submissionDate: '2024-05-17' },
-  { id: 'app009', studentName: 'Võ Văn I', studentId: 'S009', majorId: '202', schoolId: '3', status: 'Đã duyệt', submissionDate: '2024-05-18' },
-  { id: 'app010', studentName: 'Dương Thị K', studentId: 'S010', majorId: '202', schoolId: '3', status: 'Chờ duyệt', submissionDate: '2024-05-19' },
-];
 
 const ApplicationsBySchoolMajorPage: React.FC = () => {
-  const [schools, setSchools] = useState<School[]>([]);
-  const [majors, setMajors] = useState<Major[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
+  const [majorStats, setMajorStats] = useState<MajorStatistic[]>([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | undefined>(undefined);
   const [selectedMajorId, setSelectedMajorId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
-  // Giả lập tải dữ liệu từ API
+  // Load backend data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      // Giả lập độ trễ API
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const dummySchools: School[] = [
-        { id: '1', name: 'Đại học Bách Khoa Hà Nội', code: 'BKA' },
-        { id: '2', name: 'Đại học Quốc gia Hà Nội', code: 'QGHN' },
-        { id: '3', name: 'Đại học Ngoại Thương', code: 'NT' },
-      ];
-      setSchools(dummySchools);
-
-      const dummyMajors: Major[] = [
-        { id: '101', name: 'Khoa học Máy tính', code: 'IT1', schoolId: '1' },
-        { id: '102', name: 'Kỹ thuật Điện tử Viễn thông', code: 'ET', schoolId: '1' },
-        { id: '103', name: 'Công nghệ thông tin', code: 'CNTT', schoolId: '2' },
-        { id: '201', name: 'Kinh tế Quốc tế', code: 'KTQT', schoolId: '3' },
-        { id: '202', name: 'Quản trị Kinh doanh', code: 'QTKD', schoolId: '3' },
-      ];
-      setMajors(dummyMajors);
-      setApplications(dummyApplications);
-      setLoading(false);
+      try {
+        // Fetch major statistics data
+        const majorStatsData = await analyticsApi.getMajorStats();
+        console.log('=== ApplicationsBySchoolMajorPage Debug ===');
+        console.log('Raw majorStatsData:', majorStatsData);
+        console.log('Number of majors:', majorStatsData?.length || 0);
+        if (majorStatsData && majorStatsData.length > 0) {
+          console.log('First major sample:', majorStatsData[0]);
+          console.log('Schools in data:', majorStatsData.map((major: any) => ({ id: major.school?.id, name: major.school?.name, code: major.school?.code })));
+        }
+        setMajorStats(majorStatsData);
+      } catch (error) {
+        console.error('Error loading application statistics:', error);
+        message.error('Có lỗi khi tải dữ liệu thống kê nguyện vọng');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchData();
   }, []);
 
-  // Hàm ánh xạ ID sang tên
-  const getSchoolName = (id: string) => schools.find(s => s.id === id)?.name || 'N/A';
-  const getMajorName = (id: string) => majors.find(m => m.id === id)?.name || 'N/A';
-
-  // Lọc ngành theo trường được chọn
+  // Filter majors by selected school
   const filteredMajorsBySchool = useMemo(() => {
     if (!selectedSchoolId) {
-      return majors; // Nếu không chọn trường, hiển thị tất cả ngành
+      return majorStats;
     }
-    return majors.filter(major => major.schoolId === selectedSchoolId);
-  }, [selectedSchoolId, majors]);
+    return majorStats.filter(stat => stat.school.id === selectedSchoolId);
+  }, [selectedSchoolId, majorStats]);
 
-  // Thống kê số lượng nguyện vọng cho từng ngành
-  const majorApplicationCounts = useMemo(() => {
-    const counts: { [majorId: string]: { total: number; approved: number; pending: number; rejected: number } } = {};
-    applications.forEach(app => {
-      if (!counts[app.majorId]) {
-        counts[app.majorId] = { total: 0, approved: 0, pending: 0, rejected: 0 };
-      }
-      counts[app.majorId].total++;
-      if (app.status === 'Đã duyệt') {
-        counts[app.majorId].approved++;
-      } else if (app.status === 'Chờ duyệt') {
-        counts[app.majorId].pending++;
-      } else if (app.status === 'Từ chối') {
-        counts[app.majorId].rejected++;
-      }
+  // Get unique schools from major stats for dropdown
+  const uniqueSchools = useMemo(() => {
+    const schoolMap = new Map();
+    majorStats.forEach(stat => {
+      schoolMap.set(stat.school.id, stat.school);
     });
-    return counts;
-  }, [applications]);
+    const schools = Array.from(schoolMap.values());
+    console.log('=== uniqueSchools Debug ===');
+    console.log('majorStats length:', majorStats.length);
+    console.log('schoolMap size:', schoolMap.size);
+    console.log('uniqueSchools result:', schools);
+    console.log('School IDs in result:', schools.map((s: any) => s.id));
+    console.log('School names in result:', schools.map((s: any) => s.name));
+    return schools;
+  }, [majorStats]);
 
-
-  // Dữ liệu hiển thị trong bảng
+  // Prepare table data
   const tableData = useMemo(() => {
     return filteredMajorsBySchool
-      .filter(major => !selectedMajorId || major.id === selectedMajorId) // Lọc thêm theo ngành nếu có
-      .map(major => {
-        const counts = majorApplicationCounts[major.id] || { total: 0, approved: 0, pending: 0, rejected: 0 };
-        return {
-          key: major.id,
-          schoolName: getSchoolName(major.schoolId),
-          majorName: major.name,
-          majorCode: major.code,
-          totalApplications: counts.total,
-          approvedApplications: counts.approved,
-          pendingApplications: counts.pending,
-          rejectedApplications: counts.rejected,
-        };
-      });
-  }, [filteredMajorsBySchool, selectedMajorId, majorApplicationCounts, getSchoolName]);
+      .filter(stat => !selectedMajorId || stat.id === selectedMajorId)
+      .map(stat => ({
+        key: stat.id,
+        schoolName: stat.school.name,
+        majorName: stat.name,
+        majorCode: stat.code,
+        quota: stat.quota,
+        totalApplications: stat.totalApplications,
+        approvedApplications: stat.approvedApplications,
+        pendingApplications: stat.pendingApplications,
+        rejectedApplications: stat.rejectedApplications,
+      }));
+  }, [filteredMajorsBySchool, selectedMajorId]);
 
-
-  // Định nghĩa các cột cho bảng
+  // Table columns definition
   const columns = [
     {
       title: 'Trường',
@@ -155,12 +117,20 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
       sorter: (a: any, b: any) => a.majorName.localeCompare(b.majorName),
     },
     {
+      title: 'Chỉ tiêu',
+      dataIndex: 'quota',
+      key: 'quota',
+      sorter: (a: any, b: any) => a.quota - b.quota,
+      render: (quota: number) => <Tag color="cyan">{quota}</Tag>,
+      align: 'center' as const,
+    },
+    {
       title: 'Tổng số NV',
       dataIndex: 'totalApplications',
       key: 'totalApplications',
       sorter: (a: any, b: any) => a.totalApplications - b.totalApplications,
       render: (count: number) => <Tag color="blue">{count}</Tag>,
-      align: 'center' as const, // Căn giữa cột
+      align: 'center' as const,
     },
     {
       title: 'Đã duyệt',
@@ -188,12 +158,18 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
     },
   ];
 
-  // Tính tổng số nguyện vọng cho các Card thống kê
-  const totalApplicationsCount = useMemo(() => applications.length, [applications]);
-  const totalApproved = useMemo(() => applications.filter(app => app.status === 'Đã duyệt').length, [applications]);
-  const totalPending = useMemo(() => applications.filter(app => app.status === 'Chờ duyệt').length, [applications]);
-  const totalRejected = useMemo(() => applications.filter(app => app.status === 'Từ chối').length, [applications]);
-
+  // Calculate summary statistics
+  const totalApplicationsCount = useMemo(() => 
+    majorStats.reduce((sum, stat) => sum + stat.totalApplications, 0), [majorStats]);
+  
+  const totalApproved = useMemo(() => 
+    majorStats.reduce((sum, stat) => sum + stat.approvedApplications, 0), [majorStats]);
+  
+  const totalPending = useMemo(() => 
+    majorStats.reduce((sum, stat) => sum + stat.pendingApplications, 0), [majorStats]);
+  
+  const totalRejected = useMemo(() => 
+    majorStats.reduce((sum, stat) => sum + stat.rejectedApplications, 0), [majorStats]);
 
   return (
     <div>
@@ -205,6 +181,7 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {/* Summary Cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
             <Col span={6}>
               <Card bordered={false}>
@@ -244,13 +221,14 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
             </Col>
           </Row>
 
+          {/* Filters */}
           <Space style={{ marginBottom: 16 }}>
             <Select
               placeholder="Lọc theo Trường"
               style={{ width: 250 }}
               onChange={value => {
                 setSelectedSchoolId(value);
-                setSelectedMajorId(undefined); // Reset major khi chọn trường mới
+                setSelectedMajorId(undefined); // Reset major when school changes
               }}
               value={selectedSchoolId}
               allowClear
@@ -260,7 +238,7 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
                 String(option?.children || '').toLowerCase().includes(input.toLowerCase())
               }
             >
-              {schools.map(school => (
+              {uniqueSchools.map(school => (
                 <Option key={school.id} value={school.id}>
                   {school.name} ({school.code})
                 </Option>
@@ -272,7 +250,7 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
               style={{ width: 250 }}
               onChange={value => setSelectedMajorId(value)}
               value={selectedMajorId}
-              disabled={!selectedSchoolId && majors.length === 0} // Disable nếu không có trường hoặc không có ngành
+              disabled={!selectedSchoolId && filteredMajorsBySchool.length === 0}
               allowClear
               showSearch
               optionFilterProp="children"
@@ -280,19 +258,25 @@ const ApplicationsBySchoolMajorPage: React.FC = () => {
                 String(option?.children || '').toLowerCase().includes(input.toLowerCase())
               }
             >
-              {filteredMajorsBySchool.map(major => (
-                <Option key={major.id} value={major.id}>
-                  {major.name} ({major.code})
+              {filteredMajorsBySchool.map(stat => (
+                <Option key={stat.id} value={stat.id}>
+                  {stat.name} ({stat.code})
                 </Option>
               ))}
             </Select>
           </Space>
 
+          {/* Statistics Table */}
           <Table
             columns={columns}
             dataSource={tableData}
             rowKey="key"
-            pagination={{ pageSize: 10 }}
+            pagination={{ 
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} ngành`,
+            }}
             bordered
             locale={{ emptyText: 'Không có dữ liệu nguyện vọng phù hợp.' }}
           />

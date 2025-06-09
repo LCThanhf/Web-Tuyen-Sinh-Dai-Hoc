@@ -11,88 +11,39 @@ import {
   InputNumber,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { adminApi, type AdminSchool, type AdminAdmissionMethod, type AdminMajor } from '../../services/adminApi';
 
-interface AdmissionMethod {
-  name: string;
-  percentage: number;
-}
-
-interface Major {
-  id: string;
-  name: string;
-  quota: number;
-}
-
-interface School {
-  id: string;
-  name: string;
-  code: string;
-  totalQuota: number;
-  admissionMethods: AdmissionMethod[];
-  majors: Major[];
-}
+// Use the types from adminApi
+type School = AdminSchool;
+type AdmissionMethod = AdminAdmissionMethod;
+type Major = AdminMajor;
 
 const ManageSchoolsPage: React.FC = () => {
   const [schools, setSchools] = useState<School[]>([]);
+  const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isMajorModalVisible, setIsMajorModalVisible] = useState(false);
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
-  const [viewingMajors, setViewingMajors] = useState<Major[]>([]);
+  const [majorsForEditing, setMajorsForEditing] = useState<Major[]>([]);
   const [form] = Form.useForm();
   const [admissionMethodsForm] = Form.useForm();
-  // State để chỉnh sửa ngành trong modal
-  const [majorsForEditing, setMajorsForEditing] = useState<Major[]>([]);
+
+  // Fetch schools from backend
+  const fetchSchools = async () => {
+    try {
+      setLoading(true);
+      const schoolsData = await adminApi.getSchools();
+      setSchools(schoolsData);
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+      message.error('Không thể tải danh sách trường. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const dummySchools: School[] = [
-      {
-        id: '1',
-        name: 'Đại học Bách Khoa Hà Nội',
-        code: 'BKA',
-        totalQuota: 5000,
-        admissionMethods: [
-          { name: 'Điểm THPT', percentage: 50 },
-          { name: 'Học bạ', percentage: 20 },
-          { name: 'ĐGNL/TD', percentage: 30 },
-        ],
-        majors: [
-          { id: '101', name: 'Công nghệ thông tin', quota: 1500 },
-          { id: '102', name: 'Điện tử viễn thông', quota: 1000 },
-          { id: '103', name: 'Cơ khí', quota: 800 },
-        ],
-      },
-      {
-        id: '2',
-        name: 'Đại học Quốc gia Hà Nội',
-        code: 'QGHN',
-        totalQuota: 8000,
-        admissionMethods: [
-          { name: 'Điểm THPT', percentage: 60 },
-          { name: 'Học bạ', percentage: 20 },
-          { name: 'ĐGNL/TD', percentage: 20 },
-        ],
-        majors: [
-          { id: '201', name: 'Khoa học máy tính', quota: 2000 },
-          { id: '202', name: 'Ngôn ngữ Anh', quota: 1200 },
-        ],
-      },
-      {
-        id: '3',
-        name: 'Đại học Ngoại Thương',
-        code: 'NT',
-        totalQuota: 3000,
-        admissionMethods: [
-          { name: 'Điểm THPT', percentage: 70 },
-          { name: 'Học bạ', percentage: 15 },
-          { name: 'ĐGNL/TD', percentage: 15 },
-        ],
-        majors: [
-          { id: '301', name: 'Kinh tế quốc tế', quota: 1000 },
-          { id: '302', name: 'Quản trị kinh doanh', quota: 800 },
-        ],
-      },
-    ];
-    setSchools(dummySchools);
+    fetchSchools();
   }, []);
 
   const generateSchoolCode = (schoolName: string): string => {
@@ -106,7 +57,7 @@ const ManageSchoolsPage: React.FC = () => {
       .substring(0, 3);
   };
 
-  // Modal thêm/sửa trường giữ nguyên như trước...
+  // Modal handlers
   const handleAddSchool = () => {
     setEditingSchool(null);
     form.resetFields();
@@ -129,13 +80,20 @@ const ManageSchoolsPage: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  const handleDeleteSchool = (id: string) => {
-    setSchools(schools.filter(school => school.id !== id));
-    message.success('Xóa trường thành công!');
+  const handleDeleteSchool = async (id: string) => {
+    try {
+      await adminApi.deleteSchool(id);
+      message.success('Xóa trường thành công!');
+      fetchSchools(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error deleting school:', error);
+      message.error(error.response?.data?.message || 'Không thể xóa trường. Vui lòng thử lại!');
+    }
   };
 
   const handleOk = async () => {
     try {
+      setLoading(true);
       const values = await form.validateFields();
       const admissionMethodValues = await admissionMethodsForm.validateFields();
 
@@ -151,40 +109,33 @@ const ManageSchoolsPage: React.FC = () => {
 
       const updatedAdmissionMethods = admissionMethodValues.admissionMethods.map(
         (method: AdmissionMethod) => ({
-          ...method,
+          name: method.name,
           percentage: method.percentage || 0,
         })
       );
 
+      const schoolData = {
+        name: values.name,
+        code: generateSchoolCode(values.name),
+        totalQuota: 0, // Default value, can be updated later
+        admissionMethods: updatedAdmissionMethods,
+      };
+
       if (editingSchool) {
-        const updatedSchools = schools.map(school =>
-          school.id === editingSchool.id
-            ? {
-                ...school,
-                name: values.name,
-                code: generateSchoolCode(values.name),
-                admissionMethods: updatedAdmissionMethods,
-              }
-            : school
-        );
-        setSchools(updatedSchools);
+        await adminApi.updateSchool(editingSchool.id, schoolData);
         message.success('Cập nhật trường thành công!');
       } else {
-        const newSchool: School = {
-          ...values,
-          id: String(schools.length + 1),
-          code: generateSchoolCode(values.name),
-          totalQuota: 0,
-          admissionMethods: updatedAdmissionMethods,
-          majors: [],
-        };
-        setSchools([...schools, newSchool]);
+        await adminApi.createSchool(schoolData);
         message.success('Thêm trường mới thành công!');
       }
+      
       setIsModalVisible(false);
-    } catch (errorInfo) {
-      console.log('Validate Failed:', errorInfo);
-      message.error('Vui lòng điền đầy đủ và đúng thông tin!');
+      fetchSchools(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error saving school:', error);
+      message.error(error.response?.data?.message || 'Không thể lưu thông tin trường. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -192,38 +143,31 @@ const ManageSchoolsPage: React.FC = () => {
     setIsModalVisible(false);
   };
 
-  // *** Bổ sung: modal xem và chỉnh sửa ngành của trường ***
+  // Major management modal
   const handleViewMajors = (school: School) => {
-    setViewingMajors(school.majors);
     setMajorsForEditing(school.majors);
     setIsMajorModalVisible(true);
-    setEditingSchool(school); // Lưu trường đang xem ngành để cập nhật về sau
+    setEditingSchool(school);
   };
 
-  // Sửa quota ngành trong modal
+  // Major viewing (read-only since major management happens in ManageMajorsPage)
   const handleQuotaChange = (majorId: string, value: number | null) => {
+    // This is now read-only, majors should be managed in ManageMajorsPage
     if (value === null) return;
     setMajorsForEditing(current =>
       current.map(m => (m.id === majorId ? { ...m, quota: value } : m))
     );
   };
 
-  // Xóa ngành trong modal
   const handleDeleteMajor = (majorId: string) => {
+    // This is now read-only, majors should be managed in ManageMajorsPage
     setMajorsForEditing(current => current.filter(m => m.id !== majorId));
   };
 
-  // Lưu thay đổi ngành về trường
   const handleSaveMajors = () => {
-    if (!editingSchool) return;
-
-    // Cập nhật danh sách majors trong trường đang edit
-    const updatedSchools = schools.map(school =>
-      school.id === editingSchool.id ? { ...school, majors: majorsForEditing } : school
-    );
-    setSchools(updatedSchools);
-    message.success('Cập nhật ngành thành công!');
+    // For now, just close the modal since major management should happen in ManageMajorsPage
     setIsMajorModalVisible(false);
+    message.info('Để quản lý ngành, vui lòng sử dụng trang Quản lý Ngành.');
   };
 
   // Các cột bảng trường giữ nguyên
@@ -243,7 +187,7 @@ const ManageSchoolsPage: React.FC = () => {
     {
       title: 'Chỉ tiêu',
       key: 'totalQuota',
-      render: (text: string, record: School) => (
+      render: (_: any, record: School) => (
         <Space size="middle">
           <span>{record.majors.reduce((sum, major) => sum + major.quota, 0)}</span>
           <Button icon={<EyeOutlined />} onClick={() => handleViewMajors(record)} size="small">
@@ -255,7 +199,7 @@ const ManageSchoolsPage: React.FC = () => {
     {
       title: 'Phương thức xét tuyển',
       key: 'admissionMethods',
-      render: (text: string, record: School) => (
+      render: (_: any, record: School) => (
         <span>
           {record.admissionMethods
             .map(method => `${method.name} (${method.percentage}%)`)
@@ -266,7 +210,7 @@ const ManageSchoolsPage: React.FC = () => {
     {
       title: 'Hành động',
       key: 'actions',
-      render: (text: string, record: School) => (
+      render: (_: any, record: School) => (
         <Space size="middle">
           <Button icon={<EditOutlined />} onClick={() => handleEditSchool(record)} type="primary">
             Sửa
@@ -333,7 +277,14 @@ const ManageSchoolsPage: React.FC = () => {
       >
         Thêm Trường Mới
       </Button>
-      <Table columns={columns} dataSource={schools} rowKey="id" pagination={{ pageSize: 10 }} bordered />
+      <Table 
+        columns={columns} 
+        dataSource={schools} 
+        rowKey="id" 
+        pagination={{ pageSize: 10 }} 
+        bordered 
+        loading={loading}
+      />
 
       {/* Modal thêm/sửa trường */}
       <Modal

@@ -66,8 +66,12 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = (role: string, user: any) => {
+    console.log('🔍 App handleLogin:');
+    console.log('- Received role:', role);
+    console.log('- Received user:', user);
     setUserRole(role);
     setUserData(user);
+    console.log('- State updated with role:', role);
   };
 
   const handleLogout = () => {
@@ -146,11 +150,19 @@ const App: React.FC = () => {
         <Route
           path="/admin/*"
           element={
-            userRole === "admin" ? (
-              <AdminDashboard onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            (() => {
+              console.log('🔍 Admin Route Guard:');
+              console.log('- Current userRole:', userRole);
+              console.log('- userRole === "admin":', userRole === "admin");
+              
+              if (userRole === "admin") {
+                console.log('- Allowing access to AdminDashboard');
+                return <AdminDashboard onLogout={handleLogout} />;
+              } else {
+                console.log('- Redirecting to login');
+                return <Navigate to="/login" replace />;
+              }
+            })()
           }
         >
           <Route index element={<Navigate to="dashboard" replace />} />

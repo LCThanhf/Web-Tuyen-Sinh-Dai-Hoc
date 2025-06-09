@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   Input,
@@ -11,9 +10,12 @@ import {
   Typography,
   Row,
   Col,
-  Form,
-  InputNumber,
   message,
+  Spin,
+  Pagination,
+  Select,
+  Card,
+  Empty,
 } from "antd";
 import {
   SearchOutlined,
@@ -21,640 +23,597 @@ import {
   CheckOutlined,
   CloseOutlined,
   ExclamationCircleOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
+import { adminApi } from '../../services/adminApi';
 
 const { TabPane } = Tabs;
 const { Text, Title } = Typography;
 const { confirm } = Modal;
+const { Option } = Select;
 
-type StatusType = "Chờ duyệt" | "Đã duyệt" | "Từ chối";
+type DocumentType = 'personal' | 'scores' | 'priority' | 'achievement' | 'certificate';
 
-interface FileProof {
-  url?: string;
-  name?: string;
-}
+interface ProofManagementPageProps {}
 
-interface InfoItem {
-  status: StatusType;
-  reason?: string;
-  files?: FileProof[];
-  [key: string]: any;
-}
+const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
+  // State management
+  const [loading, setLoading] = useState(false);
+  const [currentTab, setCurrentTab] = useState<DocumentType>('personal');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | undefined>('PENDING');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-// Dữ liệu 3 môn thi bắt buộc
-const DEFAULT_SUBJECTS = ["Toán", "Văn", "Anh"];
+  // Status tag component
+  const StatusTag: React.FC<{ status: string }> = ({ status }) => {
+    const getColor = (status: string) => {
+      switch (status) {
+        case 'APPROVED': return 'success';
+        case 'REJECTED': return 'error';
+        case 'PENDING': return 'processing';
+        default: return 'default';
+      }
+    };
 
-// Môn bổ sung theo ban thi
-const NATURAL_SCIENCE_SUBJECTS = ["Lý", "Hóa", "Sinh"];
-const SOCIAL_SCIENCE_SUBJECTS = ["Sử", "Địa", "GDCD"];
+    const getText = (status: string) => {
+      switch (status) {
+        case 'APPROVED': return 'Đã duyệt';
+        case 'REJECTED': return 'Từ chối';
+        case 'PENDING': return 'Chờ duyệt';
+        default: return status;
+      }
+    };
 
-// Đơn vị tổ chức ĐGNL/ĐGTD
-const ASSESSMENT_UNITS = [
-  "ĐHQG Hà Nội",
-  "ĐHQG TP.HCM",
-  "ĐH Bách khoa Hà Nội",
-];
-
-// Dữ liệu thí sinh mẫu
-interface Student {
-  id: string; // CCCD làm ID quản lý
-  fullName: string;
-  personalInfo: InfoItem & {
-    fullName: string;
-    dob: string;
-    gender: string;
-    cccd: string;
-    cccdIssuePlace: string;
-    cccdIssueDate: string;
-    email: string;
-    phone: string;
-    address: string;
-    highSchoolName: string;
-    city: string;
-    district: string;
-    graduationYear: number;
-  };
-  scores: InfoItem & {
-    examBan: "Tự nhiên" | "Xã hội";
-    examNumber: string;
-    scoresBySubject: Record<string, number>; // Môn => điểm
-  };
-  transcript: InfoItem & {
-    avgBySubject: Record<string, number | null>; // điểm trung bình 6 kỳ từng môn (7 môn)
-  };
-  assessments: InfoItem[]; // Tối đa 3 bài thi ĐGNL/ĐGTD
-  priorityInfo: InfoItem & {
-    khuVucUuTien: string;
-    doiTuongUuTien: string;
-  };
-  hsgAchievement: InfoItem & {
-    type: string;
-    subject: string;
-    year: string;
-    rank: string;
-  };
-  englishCert: InfoItem & {
-    type: string;
-    score: number;
-    issueDate: string;
-    registrationCode: string;
-    issuer: string;
-  };
-}
-
-const sampleStudents: Student[] = [
-  {
-    id: "123456789",
-    fullName: "Nguyễn Văn A",
-    personalInfo: {
-      status: "Chờ duyệt",
-      fullName: "Nguyễn Văn A",
-      dob: "01/01/2000",
-      gender: "Nam",
-      cccd: "123456789",
-      cccdIssuePlace: "Hà Nội",
-      cccdIssueDate: "15/01/2018",
-      email: "nguyenvana@example.com",
-      phone: "0912345678",
-      address: "123 Đường ABC",
-      highSchoolName: "THPT Nguyễn Trãi",
-      city: "TP. Hồ Chí Minh",
-      district: "Quận 1",
-      graduationYear: 2018,
-      files: [
-        { url: "https://example.com/cccd-front.jpg", name: "Mặt trước CCCD" },
-        { url: "https://example.com/cccd-back.jpg", name: "Mặt sau CCCD" },
-      ],
-    },
-    scores: {
-      status: "Chờ duyệt",
-      examBan: "Tự nhiên",
-      examNumber: "123456",
-      scoresBySubject: {
-        Toán: 8,
-        Văn: 7.5,
-        Anh: 7,
-        Lý: 8.5,
-        Hóa: 8,
-        Sinh: 7.5,
-      },
-      files: [{ url: "https://example.com/score.pdf", name: "Điểm thi THPT" }],
-    },
-    transcript: {
-      status: "Chờ duyệt",
-      avgBySubject: {
-        Toán: 7.8,
-        Văn: 7.2,
-        Anh: 6.8,
-        Lý: 7.5,
-        Hóa: 7.9,
-        Sinh: 7.0,
-        Sử: null,
-        Địa: null,
-        GDCD: null,
-      },
-      files: [{ url: "https://example.com/transcript.pdf", name: "Học bạ" }],
-    },
-    assessments: [
-      {
-        status: "Chờ duyệt",
-        type: "ĐGNL",
-        unit: "ĐHQG Hà Nội",
-        score: 85,
-        noScoreDeclared: false,
-        files: [{ url: "https://example.com/assessment1.pdf", name: "Phiếu điểm 1" }],
-      },
-      {
-        status: "Chờ duyệt",
-        type: "ĐGNL",
-        unit: "ĐHQG TP.HCM",
-        score: 82,
-        noScoreDeclared: false,
-        files: [{ url: "https://example.com/assessment2.pdf", name: "Phiếu điểm 2" }],
-      },
-    ],
-    priorityInfo: {
-      status: "Đã duyệt",
-      khuVucUuTien: "KV1",
-      doiTuongUuTien: "DT01",
-      files: [
-        { url: "https://example.com/priority-kv.pdf", name: "Minh chứng KV" },
-        { url: "https://example.com/priority-dt.pdf", name: "Minh chứng ĐT" },
-      ],
-    },
-    hsgAchievement: {
-      status: "Từ chối",
-      type: "tinh",
-      subject: "Toán",
-      year: "2020",
-      rank: "Nhất",
-      reason: "File minh chứng không rõ ràng",
-      files: [{ url: "https://example.com/hsg.pdf", name: "Thành tích HSG" }],
-    },
-    englishCert: {
-      status: "Chờ duyệt",
-      type: "IELTS",
-      score: 6.5,
-      issueDate: "01/05/2023",
-      registrationCode: "ABC123",
-      issuer: "British Council",
-      files: [{ url: "https://example.com/cert.pdf", name: "Chứng chỉ tiếng Anh" }],
-    },
-  },
-];
-
-const StudentAndProofManagementPage: React.FC = () => {
-  const [students, setStudents] = useState<Student[]>(sampleStudents);
-  const [searchText, setSearchText] = useState("");
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-
-  // Để lưu trạng thái sửa/chỉnh trạng thái đang mở
-  const [editingSection, setEditingSection] = useState<keyof Student | null>(null);
-  const [rejectReasonInput, setRejectReasonInput] = useState<string>("");
-
-  // Tìm kiếm theo CCCD hoặc tên
-  const filteredStudents = students.filter(
-    (stu) =>
-      stu.id.includes(searchText.trim()) ||
-      stu.fullName.toLowerCase().includes(searchText.trim().toLowerCase())
-  );
-
-  // Tính trạng thái tổng thể: nếu có 1 mục chờ duyệt => chờ duyệt; nếu có từ chối => có từ chối; else hoàn tất
-  const getOverallStatus = (stu: Student): StatusType => {
-    const statusList: StatusType[] = [
-      stu.personalInfo.status,
-      stu.scores.status,
-      stu.transcript.status,
-      ...stu.assessments.map((a) => a.status),
-      stu.priorityInfo.status,
-      stu.hsgAchievement.status,
-      stu.englishCert.status,
-    ];
-
-    if (statusList.includes("Chờ duyệt")) return "Chờ duyệt";
-    if (statusList.includes("Từ chối")) return "Từ chối";
-    return "Đã duyệt";
+    return <Tag color={getColor(status)}>{getText(status)}</Tag>;
   };
 
-  // Duyệt hoặc từ chối từng mục
-  const handleUpdateStatus = (
-    sectionKey: keyof Student,
-    newStatus: StatusType,
-    reason?: string,
-    indexAssessment?: number // nếu cập nhật bài đánh giá nào
-  ) => {
-    if (!selectedStudent) return;
-    setStudents((prev) =>
-      prev.map((stu) => {
-        if (stu.id === selectedStudent.id) {
-          if (sectionKey === "assessments" && typeof indexAssessment === "number") {
-            // Cập nhật bài đánh giá cụ thể
-            const newAssessments = [...stu.assessments];
-            newAssessments[indexAssessment] = {
-              ...newAssessments[indexAssessment],
-              status: newStatus,
-              reason: newStatus === "Từ chối" ? reason : undefined,
-            };
-            return { ...stu, assessments: newAssessments };
-          } else {
-            const currentSection = stu[sectionKey] as InfoItem;
-            const updatedSection = {
-              ...currentSection,
-              status: newStatus,
-              reason: newStatus === "Từ chối" ? reason : undefined,
-            };
-            return { ...stu, [sectionKey]: updatedSection };
-          }
-        }
-        return stu;
-      })
-    );
-    message.success(`Cập nhật trạng thái thành công.`);
-    setEditingSection(null);
-    setRejectReasonInput("");
+  // Fetch documents based on current tab and filters
+  const fetchDocuments = async () => {
+    try {
+      setLoading(true);
+      const filters = {
+        page: currentPage,
+        limit: pageSize,
+        status: statusFilter,
+      };
+
+      let response;
+      switch (currentTab) {
+        case 'personal':
+          response = await adminApi.getPersonalInfoDocuments(filters);
+          break;
+        case 'scores':
+          response = await adminApi.getScoreDocuments(filters);
+          break;
+        case 'priority':
+          response = await adminApi.getPriorityDocuments(filters);
+          break;
+        case 'achievement':
+          response = await adminApi.getAchievementDocuments(filters);
+          break;
+        case 'certificate':
+          response = await adminApi.getCertificateDocuments(filters);
+          break;
+        default:
+          return;
+      }
+
+      setDocuments(response.documents);
+      setTotal(response.pagination.total);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      message.error('Không thể tải danh sách hồ sơ. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Mở modal nhập lý do từ chối
-  const openRejectModal = (
-    sectionKey: keyof Student,
-    indexAssessment?: number
-  ) => {
-    let inputReason = "";
+  // Approve document
+  const handleApprove = async (id: string, adminNote?: string) => {
+    try {
+      setLoading(true);
+      
+      switch (currentTab) {
+        case 'personal':
+          await adminApi.approvePersonalInfo(id, { adminNote });
+          break;
+        case 'scores':
+          await adminApi.approveScores(id, { adminNote });
+          break;
+        case 'priority':
+          await adminApi.approvePriority(id, { adminNote });
+          break;
+        case 'achievement':
+          await adminApi.approveAchievement(id, { adminNote });
+          break;
+        case 'certificate':
+          await adminApi.approveCertificate(id, { adminNote });
+          break;
+      }
+
+      message.success('Đã duyệt hồ sơ thành công!');
+      fetchDocuments();
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error approving document:', error);
+      message.error('Có lỗi khi duyệt hồ sơ. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reject document with reason
+  const handleReject = (id: string) => {
+    let rejectReason = '';
 
     confirm({
-      title: "Nhập lý do từ chối",
+      title: 'Từ chối hồ sơ',
       icon: <ExclamationCircleOutlined />,
       content: (
-        <Input.TextArea
-          autoSize
-          placeholder="Lý do từ chối..."
-          onChange={(e) => {
-            inputReason = e.target.value;
-            setRejectReasonInput(inputReason);
-          }}
-        />
+        <div>
+          <p>Bạn có chắc chắn muốn từ chối hồ sơ này không?</p>
+          <Input.TextArea
+            placeholder="Nhập lý do từ chối..."
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            onChange={(e) => { rejectReason = e.target.value; }}
+          />
+        </div>
       ),
-      onOk() {
-        if (!inputReason.trim()) {
-          message.error("Lý do từ chối không được để trống!");
+      onOk: async () => {
+        if (!rejectReason.trim()) {
+          message.error('Vui lòng nhập lý do từ chối!');
           return Promise.reject();
         }
-        handleUpdateStatus(sectionKey, "Từ chối", inputReason.trim(), indexAssessment);
-        return Promise.resolve();
+
+        try {
+          setLoading(true);
+          
+          switch (currentTab) {
+            case 'personal':
+              await adminApi.rejectPersonalInfo(id, { adminNote: rejectReason });
+              break;
+            case 'scores':
+              await adminApi.rejectScores(id, { adminNote: rejectReason });
+              break;
+            case 'priority':
+              await adminApi.rejectPriority(id, { adminNote: rejectReason });
+              break;
+            case 'achievement':
+              await adminApi.rejectAchievement(id, { adminNote: rejectReason });
+              break;
+            case 'certificate':
+              await adminApi.rejectCertificate(id, { adminNote: rejectReason });
+              break;
+          }
+
+          message.success('Đã từ chối hồ sơ!');
+          fetchDocuments();
+        } catch (error) {
+          console.error('Error rejecting document:', error);
+          message.error('Có lỗi khi từ chối hồ sơ. Vui lòng thử lại!');
+        } finally {
+          setLoading(false);
+        }
       },
-      okText: "Xác nhận từ chối",
-      cancelText: "Hủy",
+      okText: 'Từ chối',
+      cancelText: 'Hủy',
+      okButtonProps: { danger: true },
     });
   };
 
-  // Hiển thị trạng thái với màu tag
-  const StatusTag: React.FC<{ status: StatusType }> = ({ status }) => {
-    let color = "default";
-    if (status === "Đã duyệt") color = "success";
-    else if (status === "Từ chối") color = "error";
-    else if (status === "Chờ duyệt") color = "processing";
-    return <Tag color={color}>{status}</Tag>;
+  // View document details
+  const viewDocument = (record: any) => {
+    setSelectedDocument(record);
+    setModalVisible(true);
   };
 
-  // Xem file minh chứng dạng nút
-  const FileViewButtons: React.FC<{ files?: FileProof[] }> = ({ files }) => {
-    if (!files || files.length === 0) return <Text>Không có file minh chứng</Text>;
-    return (
-      <Space direction="vertical">
-        {files.map((file, i) => (
+  // Get columns for table based on document type
+  const getColumns = () => {
+    const baseColumns: any[] = [
+      {
+        title: 'Họ tên thí sinh',
+        dataIndex: ['student', 'user', 'fullName'],
+        key: 'fullName',
+        render: (text: string) => <strong>{text}</strong>,
+      },
+      {
+        title: 'CCCD/CMND',
+        dataIndex: ['student', 'user', 'cccd'],
+        key: 'cccd',
+      },
+      {
+        title: 'Email',
+        dataIndex: ['student', 'user', 'email'],
+        key: 'email',
+      },
+      {
+        title: 'Trạng thái',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status: string) => <StatusTag status={status} />,
+      },
+      {
+        title: 'Ngày tạo',
+        dataIndex: 'createdAt',
+        key: 'createdAt',
+        render: (date: string) => new Date(date).toLocaleString('vi-VN'),
+      },
+    ];
+
+    // Add specific columns based on document type
+    if (currentTab === 'scores') {
+      baseColumns.splice(4, 0, {
+        title: 'Loại điểm',
+        dataIndex: 'type',
+        key: 'type',
+        render: (type: string) => {
+          const typeMap: { [key: string]: string } = {
+            'THPT': 'Điểm thi THPT',
+            'TRANSCRIPT': 'Điểm học bạ',
+            'ASSESSMENT': 'Đánh giá năng lực'
+          };
+          return typeMap[type] || type;
+        },
+      });
+    }
+
+    if (currentTab === 'priority') {
+      baseColumns.splice(4, 0, {
+        title: 'Khu vực/Đối tượng',
+        key: 'priorityInfo',
+        render: (_: any, record: any) => (
+          <div>
+            {record.priorityArea && <div>KV: {record.priorityArea}</div>}
+            {record.priorityObject && <div>ĐT: {record.priorityObject}</div>}
+          </div>
+        ),
+      });
+    }
+
+    if (currentTab === 'achievement') {
+      baseColumns.splice(4, 0, {
+        title: 'Loại thành tích',
+        dataIndex: 'achievementType',
+        key: 'achievementType',
+        render: (achievementType: string) => achievementType || 'N/A',
+      });
+    }
+
+    if (currentTab === 'certificate') {
+      baseColumns.splice(4, 0, {
+        title: 'Loại chứng chỉ',
+        dataIndex: 'certificateType',
+        key: 'certificateType',
+        render: (certificateType: string) => certificateType || 'N/A',
+      });
+    }
+
+    // Add action column
+    baseColumns.push({
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_: any, record: any) => (
+        <Space>
           <Button
-            key={i}
             type="link"
             icon={<EyeOutlined />}
-            onClick={() => window.open(file.url, "_blank")}
+            onClick={() => viewDocument(record)}
           >
-            {file.name || `File ${i + 1}`}
+            Xem chi tiết
           </Button>
-        ))}
-      </Space>
+          {record.status === 'PENDING' && (
+            <>
+              <Button
+                type="primary"
+                size="small"
+                icon={<CheckOutlined />}
+                onClick={() => handleApprove(record.id)}
+              >
+                Duyệt
+              </Button>
+              <Button
+                danger
+                size="small"
+                icon={<CloseOutlined />}
+                onClick={() => handleReject(record.id)}
+              >
+                Từ chối
+              </Button>
+            </>
+          )}
+        </Space>
+      ),
+    });
+
+    return baseColumns;
+  };
+
+  // Get tab title with count
+  const getTabTitle = (type: DocumentType, label: string) => {
+    const pendingCount = documents.filter(doc => doc.status === 'PENDING' && doc.type === type).length;
+    return (
+      <span>
+        {label}
+        {pendingCount > 0 && statusFilter === 'PENDING' && (
+          <Tag color="processing" style={{ marginLeft: 8 }}>
+            {pendingCount}
+          </Tag>
+        )}
+      </span>
     );
   };
 
-  // Hiển thị từng phần chi tiết với chức năng duyệt/từ chối
-  const DetailSection: React.FC<{
-    title: string;
-    data: InfoItem;
-    fields: { label: string; key: string }[];
-    sectionKey: keyof Student;
-    assessmentIndex?: number; // Nếu là bài đánh giá cụ thể
-  }> = ({ title, data, fields, sectionKey, assessmentIndex }) => {
-    const canApprove = data.status === "Chờ duyệt";
+  // Render document details modal content
+  const renderDocumentDetails = () => {
+    if (!selectedDocument) return null;
 
     return (
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 16,
-          marginBottom: 24,
-          backgroundColor: "#fafafa",
-        }}
-      >
-        <Title level={4}>
-          {title} <StatusTag status={data.status} />
-        </Title>
-        <Row gutter={[12, 12]}>
-          {fields.map(({ label, key }) => (
-            <Col span={12} key={key}>
-              <Text strong>{label}: </Text> {data[key] ?? "-"}
-            </Col>
-          ))}
-          <Col span={24} style={{ marginTop: 8 }}>
-            <Text strong>Minh chứng: </Text>
-            <FileViewButtons files={data.files} />
+      <div>
+        <Row gutter={[16, 16]}>
+          <Col span={12}>
+            <Text strong>Thí sinh: </Text>
+            <Text>{selectedDocument.student.user.fullName}</Text>
           </Col>
-          {data.status === "Từ chối" && data.reason && (
-            <Col span={24} style={{ marginTop: 8 }}>
-              <Text type="danger">Lý do từ chối: {data.reason}</Text>
+          <Col span={12}>
+            <Text strong>CCCD/CMND: </Text>
+            <Text>{selectedDocument.student.user.cccd}</Text>
+          </Col>
+          <Col span={12}>
+            <Text strong>Email: </Text>
+            <Text>{selectedDocument.student.user.email}</Text>
+          </Col>
+          <Col span={12}>
+            <Text strong>Trạng thái: </Text>
+            <StatusTag status={selectedDocument.status} />
+          </Col>
+          <Col span={12}>
+            <Text strong>Ngày tạo: </Text>
+            <Text>{new Date(selectedDocument.createdAt).toLocaleString('vi-VN')}</Text>
+          </Col>
+          {selectedDocument.reviewedAt && (
+            <Col span={12}>
+              <Text strong>Ngày duyệt: </Text>
+              <Text>{new Date(selectedDocument.reviewedAt).toLocaleString('vi-VN')}</Text>
             </Col>
           )}
-          {canApprove && (
-            <Col span={24} style={{ marginTop: 12 }}>
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  onClick={() => handleUpdateStatus(sectionKey, "Đã duyệt", undefined, assessmentIndex)}
-                >
-                  Duyệt
-                </Button>
-                <Button
-                  danger
-                  icon={<CloseOutlined />}
-                  onClick={() => openRejectModal(sectionKey, assessmentIndex)}
-                >
-                  Từ chối
-                </Button>
-              </Space>
+          {selectedDocument.adminNote && (
+            <Col span={24}>
+              <Text strong>Ghi chú admin: </Text>
+              <Text type={selectedDocument.status === 'REJECTED' ? 'danger' : undefined}>
+                {selectedDocument.adminNote}
+              </Text>
             </Col>
+          )}
+          
+          {/* Specific fields based on document type */}
+          {currentTab === 'scores' && selectedDocument.scores && (
+            <Col span={24}>
+              <Text strong>Điểm số: </Text>
+              <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
+                {JSON.stringify(selectedDocument.scores, null, 2)}
+              </pre>
+            </Col>
+          )}
+          
+          {currentTab === 'priority' && (
+            <>
+              {selectedDocument.priorityArea && (
+                <Col span={12}>
+                  <Text strong>Khu vực ưu tiên: </Text>
+                  <Text>{selectedDocument.priorityArea}</Text>
+                </Col>
+              )}
+              {selectedDocument.priorityObject && (
+                <Col span={12}>
+                  <Text strong>Đối tượng ưu tiên: </Text>
+                  <Text>{selectedDocument.priorityObject}</Text>
+                </Col>
+              )}
+            </>
+          )}
+          
+          {currentTab === 'achievement' && (
+            <>
+              <Col span={12}>
+                <Text strong>Loại thành tích: </Text>
+                <Text>{selectedDocument.achievementType}</Text>
+              </Col>
+              {selectedDocument.description && (
+                <Col span={24}>
+                  <Text strong>Mô tả: </Text>
+                  <Text>{selectedDocument.description}</Text>
+                </Col>
+              )}
+            </>
+          )}
+          
+          {currentTab === 'certificate' && (
+            <>
+              <Col span={12}>
+                <Text strong>Loại chứng chỉ: </Text>
+                <Text>{selectedDocument.certificateType}</Text>
+              </Col>
+              {selectedDocument.issuingBody && (
+                <Col span={12}>
+                  <Text strong>Đơn vị cấp: </Text>
+                  <Text>{selectedDocument.issuingBody}</Text>
+                </Col>
+              )}
+            </>
           )}
         </Row>
+
+        {/* Action buttons for pending documents */}
+        {selectedDocument.status === 'PENDING' && (
+          <div style={{ marginTop: 24, textAlign: 'center' }}>
+            <Space>
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
+                onClick={() => handleApprove(selectedDocument.id)}
+                loading={loading}
+              >
+                Duyệt hồ sơ
+              </Button>
+              <Button
+                danger
+                icon={<CloseOutlined />}
+                onClick={() => handleReject(selectedDocument.id)}
+                loading={loading}
+              >
+                Từ chối hồ sơ
+              </Button>
+            </Space>
+          </div>
+        )}
       </div>
     );
   };
 
-  // Cột bảng danh sách thí sinh, thêm cột trạng thái từng mục rõ ràng
-  const studentColumns = [
-    {
-      title: "Số CCCD",
-      dataIndex: "id",
-      key: "id",
-      sorter: (a: Student, b: Student) => a.id.localeCompare(b.id),
-    },
-    {
-      title: "Họ tên",
-      dataIndex: "fullName",
-      key: "fullName",
-      sorter: (a: Student, b: Student) => a.fullName.localeCompare(b.fullName),
-    },
-    {
-      title: "Trạng thái cá nhân",
-      dataIndex: ["personalInfo", "status"],
-      key: "personalInfo",
-      render: (_: any, record: Student) => <StatusTag status={record.personalInfo.status} />,
-    },
-    {
-      title: "Điểm thi THPT",
-      dataIndex: ["scores", "status"],
-      key: "scores",
-      render: (_: any, record: Student) => <StatusTag status={record.scores.status} />,
-    },
-    {
-      title: "Điểm học bạ",
-      dataIndex: ["transcript", "status"],
-      key: "transcript",
-      render: (_: any, record: Student) => <StatusTag status={record.transcript.status} />,
-    },
-    {
-      title: "ĐGNL/ĐGTD",
-      key: "assessment",
-      render: (_: any, record: Student) => {
-        // Nếu nhiều bài thì nếu có bài nào chờ duyệt thì hiển thị chờ duyệt, có từ chối thì hiển thị từ chối, ngược lại đã duyệt
-        const list = record.assessments.map((a) => a.status);
-        if (list.includes("Chờ duyệt")) return <StatusTag status="Chờ duyệt" />;
-        if (list.includes("Từ chối")) return <StatusTag status="Từ chối" />;
-        return <StatusTag status="Đã duyệt" />;
-      },
-    },
-    {
-      title: "Ưu tiên",
-      dataIndex: ["priorityInfo", "status"],
-      key: "priorityInfo",
-      render: (_: any, record: Student) => <StatusTag status={record.priorityInfo.status} />,
-    },
-    {
-      title: "Thành tích HSG",
-      dataIndex: ["hsgAchievement", "status"],
-      key: "hsgAchievement",
-      render: (_: any, record: Student) => <StatusTag status={record.hsgAchievement.status} />,
-    },
-    {
-      title: "Chứng chỉ TA",
-      dataIndex: ["englishCert", "status"],
-      key: "englishCert",
-      render: (_: any, record: Student) => <StatusTag status={record.englishCert.status} />,
-    },
-    {
-      title: "Trạng thái tổng thể",
-      key: "overallStatus",
-      render: (_: any, record: Student) => <StatusTag status={getOverallStatus(record)} />,
-    },
-    {
-      title: "Hành động",
-      key: "action",
-      render: (_: any, record: Student) => (
-        <Button type="link" onClick={() => setSelectedStudent(record)}>
-          Xem chi tiết
-        </Button>
-      ),
-    },
-  ];
+  // Effects
+  useEffect(() => {
+    fetchDocuments();
+  }, [currentTab, currentPage, pageSize, statusFilter]);
 
-  if (!selectedStudent) {
-    return (
-      <div style={{ padding: 20, maxWidth: 1100, margin: "auto" }}>
-        <Title level={3}>Quản lý Thông tin Thí sinh và Duyệt Minh chứng</Title>
-        <Input
-          placeholder="Tìm kiếm theo số CCCD hoặc tên"
-          prefix={<SearchOutlined />}
-          style={{ marginBottom: 20, width: 400 }}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          allowClear
-        />
-        <Table
-          columns={studentColumns}
-          dataSource={filteredStudents}
-          rowKey="id"
-          pagination={{ pageSize: 6 }}
-          scroll={{ x: "max-content" }}
-        />
-      </div>
-    );
-  }
+  // Reset page when changing tabs or filters
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [currentTab, statusFilter]);
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: "auto" }}>
-      <Button onClick={() => setSelectedStudent(null)} style={{ marginBottom: 20 }}>
-        ← Quay lại danh sách
-      </Button>
-      <Title level={3}>
-        Quản lý hồ sơ thí sinh: {selectedStudent.fullName} (CCCD: {selectedStudent.id})
-      </Title>
+    <div>
+      <Card>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col span={12}>
+            <Title level={2} style={{ margin: 0 }}>
+              Quản lý xét duyệt hồ sơ
+            </Title>
+          </Col>
+          <Col span={12} style={{ textAlign: 'right' }}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={fetchDocuments}
+              loading={loading}
+            >
+              Làm mới
+            </Button>
+          </Col>
+        </Row>
 
-      <Tabs defaultActiveKey="personalInfo" type="card">
-        <TabPane tab="Thông tin cá nhân" key="personalInfo">
-          <DetailSection
-            sectionKey="personalInfo"
-            title="Thông tin cá nhân"
-            data={selectedStudent.personalInfo}
-            fields={[
-              { label: "Họ và tên", key: "fullName" },
-              { label: "Ngày sinh", key: "dob" },
-              { label: "Giới tính", key: "gender" },
-              { label: "Số CCCD/CMND", key: "cccd" },
-              { label: "Nơi cấp CCCD", key: "cccdIssuePlace" },
-              { label: "Ngày cấp CCCD", key: "cccdIssueDate" },
-              { label: "Email", key: "email" },
-              { label: "Số điện thoại", key: "phone" },
-              { label: "Địa chỉ", key: "address" },
-              { label: "Trường THPT", key: "highSchoolName" },
-              { label: "Tỉnh/Thành phố", key: "city" },
-              { label: "Quận/Huyện", key: "district" },
-              { label: "Năm tốt nghiệp", key: "graduationYear" },
-            ]}
-          />
-        </TabPane>
-
-        <TabPane tab="Điểm thi THPT" key="scores">
-          <DetailSection
-            sectionKey="scores"
-            title="Điểm thi THPT"
-            data={{
-              ...selectedStudent.scores,
-              scoresBySubject: undefined,
-            }}
-            fields={[
-              { label: "Bạn thi", key: "examBan" },
-              { label: "Số báo danh", key: "examNumber" },
-            ]}
-          />
-          {/* Hiển thị điểm từng môn */}
-          <div style={{ marginTop: 12 }}>
-            <Title level={5}>Điểm từng môn</Title>
-            <Row gutter={[12, 12]}>
-              {/* Môn bắt buộc */}
-              {DEFAULT_SUBJECTS.map((subject) => (
-                <Col span={6} key={subject}>
-                  <Text strong>{subject}: </Text>
-                  {selectedStudent.scores.scoresBySubject?.[subject] ?? "-"}
-                </Col>
-              ))}
-              {/* Môn theo bạn thi */}
-              {(selectedStudent.scores.examBan === "Tự nhiên"
-                ? NATURAL_SCIENCE_SUBJECTS
-                : SOCIAL_SCIENCE_SUBJECTS
-              ).map((subject) => (
-                <Col span={6} key={subject}>
-                  <Text strong>{subject}: </Text>
-                  {selectedStudent.scores.scoresBySubject?.[subject] ?? "-"}
-                </Col>
-              ))}
-            </Row>
-          </div>
-          {/* Minh chứng */}
-          <div style={{ marginTop: 12 }}>
-            <Text strong>Minh chứng: </Text>
-            <FileViewButtons files={selectedStudent.scores.files} />
-          </div>
-        </TabPane>
-
-        <TabPane tab="Điểm học bạ" key="transcript">
-          <DetailSection
-            sectionKey="transcript"
-            title="Điểm học bạ"
-            data={selectedStudent.transcript}
-            fields={Object.keys(selectedStudent.transcript.avgBySubject).map((subject) => ({
-              label: subject,
-              key: `avgBySubject.${subject}`,
-            }))}
-          />
-          <div style={{ marginTop: 12 }}>
-            <Text strong>Minh chứng: </Text>
-            <FileViewButtons files={selectedStudent.transcript.files} />
-          </div>
-        </TabPane>
-
-        <TabPane tab="Đánh giá năng lực / Tư duy" key="assessment">
-          {selectedStudent.assessments.length === 0 && (
-            <Text>Không có bài đánh giá nào được khai báo.</Text>
-          )}
-          {selectedStudent.assessments.map((a, idx) => (
-            <DetailSection
-              key={idx}
-              sectionKey="assessments"
-              assessmentIndex={idx}
-              title={`Bài đánh giá #${idx + 1}`}
-              data={a}
-              fields={[
-                { label: "Loại đánh giá", key: "type" },
-                { label: "Đơn vị tổ chức", key: "unit" },
-                { label: "Điểm", key: "score" },
-                { label: "Không có điểm", key: "noScoreDeclared" },
-              ]}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col span={8}>
+            <Input
+              placeholder="Tìm kiếm theo tên, CCCD, email..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
             />
-          ))}
-        </TabPane>
+          </Col>
+          <Col span={4}>
+            <Select
+              placeholder="Trạng thái"
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              style={{ width: '100%' }}
+              allowClear
+            >
+              <Option value="PENDING">Chờ duyệt</Option>
+              <Option value="APPROVED">Đã duyệt</Option>
+              <Option value="REJECTED">Từ chối</Option>
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Select
+              placeholder="Số bản ghi"
+              value={pageSize}
+              onChange={(value) => setPageSize(value)}
+              style={{ width: '100%' }}
+            >
+              <Option value={10}>10 / trang</Option>
+              <Option value={20}>20 / trang</Option>
+              <Option value={50}>50 / trang</Option>
+            </Select>
+          </Col>
+        </Row>
 
-        <TabPane tab="Thông tin ưu tiên" key="priorityInfo">
-          <DetailSection
-            sectionKey="priorityInfo"
-            title="Thông tin ưu tiên"
-            data={selectedStudent.priorityInfo}
-            fields={[
-              { label: "Khu vực ưu tiên", key: "khuVucUuTien" },
-              { label: "Đối tượng ưu tiên", key: "doiTuongUuTien" },
-            ]}
+        <Tabs 
+          activeKey={currentTab} 
+          onChange={(key) => setCurrentTab(key as DocumentType)}
+          type="card"
+        >
+          <TabPane 
+            tab={getTabTitle('personal', 'Thông tin cá nhân')} 
+            key="personal"
           />
-        </TabPane>
+          <TabPane 
+            tab={getTabTitle('scores', 'Điểm thi & học bạ')} 
+            key="scores"
+          />
+          <TabPane 
+            tab={getTabTitle('priority', 'Thông tin ưu tiên')} 
+            key="priority"
+          />
+          <TabPane 
+            tab={getTabTitle('achievement', 'Thành tích HSG')} 
+            key="achievement"
+          />
+          <TabPane 
+            tab={getTabTitle('certificate', 'Chứng chỉ')} 
+            key="certificate"
+          />
+        </Tabs>
 
-        <TabPane tab="Thành tích HSG" key="hsgAchievement">
-          <DetailSection
-            sectionKey="hsgAchievement"
-            title="Thành tích Học sinh Giỏi"
-            data={selectedStudent.hsgAchievement}
-            fields={[
-              { label: "Loại thành tích", key: "type" },
-              { label: "Môn đạt giải", key: "subject" },
-              { label: "Năm đạt giải", key: "year" },
-              { label: "Loại giải", key: "rank" },
-            ]}
-          />
-        </TabPane>
+        <Spin spinning={loading}>
+          {documents.length > 0 ? (
+            <>
+              <Table
+                columns={getColumns()}
+                dataSource={documents}
+                rowKey="id"
+                pagination={false}
+                scroll={{ x: 1200 }}
+              />
+              <div style={{ marginTop: 16, textAlign: 'right' }}>
+                <Pagination
+                  current={currentPage}
+                  pageSize={pageSize}
+                  total={total}
+                  showSizeChanger={false}
+                  showQuickJumper
+                  showTotal={(total, range) =>
+                    `${range[0]}-${range[1]} của ${total} hồ sơ`
+                  }
+                  onChange={(page) => setCurrentPage(page)}
+                />
+              </div>
+            </>
+          ) : (
+            <Empty
+              description="Không có hồ sơ nào"
+              style={{ margin: '40px 0' }}
+            />
+          )}
+        </Spin>
+      </Card>
 
-        <TabPane tab="Chứng chỉ Tiếng Anh" key="englishCert">
-          <DetailSection
-            sectionKey="englishCert"
-            title="Chứng chỉ Tiếng Anh Quốc tế"
-            data={selectedStudent.englishCert}
-            fields={[
-              { label: "Loại chứng chỉ", key: "type" },
-              { label: "Điểm thi", key: "score" },
-              { label: "Ngày cấp", key: "issueDate" },
-              { label: "Mã dự thi", key: "registrationCode" },
-              { label: "Đơn vị cấp", key: "issuer" },
-            ]}
-          />
-        </TabPane>
-      </Tabs>
+      {/* Document Details Modal */}
+      <Modal
+        title="Chi tiết hồ sơ"
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {renderDocumentDetails()}
+      </Modal>
     </div>
   );
 };
 
-export default StudentAndProofManagementPage;
+export default ProofManagementPage;
 

@@ -10,6 +10,8 @@ import {
   message,
   Spin,
 } from 'antd';
+import { adminApi } from '../../services/adminApi';
+import virtualFilterApi, { type AdmissionResult } from '../../services/virtualFilterApi';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -24,135 +26,43 @@ interface Major {
   id: string;
   name: string;
   schoolId: string;
-}
-
-interface Application {
-  applicantId: string;
-  fullName: string;
-  schoolId: string;
-  majorId: string;
-  priorityOrder: number;
-  totalScore: number;
-  status: 'Approved' | 'Pending' | 'Rejected';
-}
-
-interface Quota {
-  schoolId: string;
-  majorId: string;
   quota: number;
-  minScore?: number;
-}
-
-// --- Dummy Data ---
-const dummySchools: School[] = [
-  { id: '1', name: 'Đại học Bách Khoa Hà Nội' },
-  { id: '2', name: 'Đại học Quốc gia Hà Nội' },
-  { id: '3', name: 'Đại học Ngoại Thương' },
-];
-
-const dummyMajors: Major[] = [
-  { id: '101', name: 'Khoa học Máy tính', schoolId: '1' },
-  { id: '102', name: 'Kỹ thuật Điện tử Viễn thông', schoolId: '1' },
-  { id: '103', name: 'Công nghệ thông tin', schoolId: '2' },
-  { id: '201', name: 'Kinh tế Quốc tế', schoolId: '3' },
-  { id: '202', name: 'Quản trị Kinh doanh', schoolId: '3' },
-];
-
-const dummyApplications: Application[] = [
-  { applicantId: 'SV001', fullName: 'Nguyễn Văn A', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 28.5, status: 'Approved' },
-  { applicantId: 'SV001', fullName: 'Nguyễn Văn A', schoolId: '1', majorId: '102', priorityOrder: 2, totalScore: 28.0, status: 'Approved' },
-  { applicantId: 'SV002', fullName: 'Trần Thị B', schoolId: '3', majorId: '201', priorityOrder: 1, totalScore: 27.8, status: 'Approved' },
-  { applicantId: 'SV003', fullName: 'Lê Văn C', schoolId: '2', majorId: '103', priorityOrder: 1, totalScore: 26.0, status: 'Approved' },
-  { applicantId: 'SV004', fullName: 'Phạm Thị D', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 28.3, status: 'Approved' },
-  { applicantId: 'SV005', fullName: 'Hoàng Văn E', schoolId: '3', majorId: '202', priorityOrder: 1, totalScore: 25.5, status: 'Approved' },
-  { applicantId: 'SV003', fullName: 'Lê Văn C', schoolId: '1', majorId: '102', priorityOrder: 2, totalScore: 26.5, status: 'Approved' },
-  { applicantId: 'SV006', fullName: 'Nguyễn Thị F', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 28.1, status: 'Approved' },
-  { applicantId: 'SV007', fullName: 'Đặng Văn G', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 27.9, status: 'Approved' },
-  { applicantId: 'SV007', fullName: 'Đặng Văn G', schoolId: '1', majorId: '102', priorityOrder: 2, totalScore: 27.8, status: 'Approved' },
-  { applicantId: 'SV008', fullName: 'Bùi Thị H', schoolId: '3', majorId: '201', priorityOrder: 1, totalScore: 27.0, status: 'Approved' },
-  { applicantId: 'SV009', fullName: 'Võ Văn I', schoolId: '2', majorId: '103', priorityOrder: 1, totalScore: 26.5, status: 'Approved' },
-  { applicantId: 'SV010', fullName: 'Dương Thị K', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 27.5, status: 'Approved' },
-  { applicantId: 'SV010', fullName: 'Dương Thị K', schoolId: '1', majorId: '102', priorityOrder: 2, totalScore: 27.4, status: 'Approved' },
-  { applicantId: 'SV011', fullName: 'Nguyễn Văn L', schoolId: '1', majorId: '101', priorityOrder: 1, totalScore: 27.2, status: 'Approved' },
-];
-
-const dummyQuotas: Quota[] = [
-  { schoolId: '1', majorId: '101', quota: 5, minScore: 20 },
-  { schoolId: '1', majorId: '102', quota: 3, minScore: 18 },
-  { schoolId: '2', majorId: '103', quota: 4, minScore: 19 },
-  { schoolId: '3', majorId: '201', quota: 2, minScore: 20 },
-  { schoolId: '3', majorId: '202', quota: 1, minScore: 18 },
-];
-
-// --- Thuật toán lọc ảo đa nguyện vọng ---
-function runVirtualFilter(applications: Application[], quotas: Quota[], maxPriority = 3) {
-  const admittedMap = new Map<string, Application[]>(); // key = `${schoolId}_${majorId}`
-  const admittedApplicants = new Set<string>();
-
-  for (let priority = 1; priority <= maxPriority; priority++) {
-    // Lấy các ứng viên nguyện vọng priority chưa trúng tuyển
-    const currentApps = applications.filter(app =>
-      app.priorityOrder === priority &&
-      !admittedApplicants.has(app.applicantId) &&
-      app.status === 'Approved'
-    );
-
-    // Nhóm theo trường-ngành
-    const grouped = currentApps.reduce<Record<string, Application[]>>((acc, app) => {
-      const key = `${app.schoolId}_${app.majorId}`;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(app);
-      return acc;
-    }, {});
-
-    for (const key in grouped) {
-      const groupApps = grouped[key];
-      const [schoolId, majorId] = key.split('_');
-
-      const quota = quotas.find(q => q.schoolId === schoolId && q.majorId === majorId);
-      if (!quota) continue;
-
-      // Lọc điểm sàn
-      const filteredApps = groupApps.filter(app => app.totalScore >= (quota.minScore ?? 0));
-
-      // Sắp xếp điểm giảm dần
-      filteredApps.sort((a, b) => b.totalScore - a.totalScore);
-
-      const existingAdmitted = admittedMap.get(key) ?? [];
-      const quotaLeft = quota.quota - existingAdmitted.length;
-      if (quotaLeft <= 0) continue;
-
-      const admittedNow = filteredApps.slice(0, quotaLeft);
-
-      // Cập nhật danh sách
-      admittedMap.set(key, existingAdmitted.concat(admittedNow));
-      admittedNow.forEach(app => admittedApplicants.add(app.applicantId));
-    }
-  }
-
-  return admittedMap;
 }
 
 const VirtualFilterPage: React.FC = () => {
   const [schools, setSchools] = useState<School[]>([]);
   const [majors, setMajors] = useState<Major[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [quotas, setQuotas] = useState<Quota[]>([]);
-
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | undefined>(undefined);
   const [filteredMajors, setFilteredMajors] = useState<Major[]>([]);
   const [selectedMajorId, setSelectedMajorId] = useState<string | undefined>(undefined);
 
   const [loading, setLoading] = useState(false);
-  const [resultMap, setResultMap] = useState<Map<string, Application[]>>(new Map());
+  const [results, setResults] = useState<AdmissionResult[]>([]);
+  const [summary, setSummary] = useState<any>(null);
 
   useEffect(() => {
-    // Load dữ liệu giả lập
-    setSchools(dummySchools);
-    setMajors(dummyMajors);
-    setApplications(dummyApplications);
-    setQuotas(dummyQuotas);
+    loadSchoolsAndMajors();
   }, []);
+
+  const loadSchoolsAndMajors = async () => {
+    try {
+      const [schoolsData, majorsData] = await Promise.all([
+        adminApi.getSchools(),
+        adminApi.getMajors()
+      ]);
+      
+      setSchools(schoolsData.map(s => ({ id: s.id, name: s.name })));
+      setMajors(majorsData.map(m => ({ 
+        id: m.id, 
+        name: m.name, 
+        schoolId: m.schoolId,
+        quota: m.quota 
+      })));
+    } catch (error) {
+      console.error('Error loading schools and majors:', error);
+      message.error('Không thể tải danh sách trường và ngành');
+    }
+  };
 
   // Cập nhật danh sách ngành theo trường
   useEffect(() => {
@@ -165,18 +75,30 @@ const VirtualFilterPage: React.FC = () => {
     }
   }, [selectedSchoolId, majors]);
 
-  const handleRunFilter = () => {
+  const handleRunFilter = async () => {
     if (!selectedSchoolId || !selectedMajorId) {
       message.warning('Vui lòng chọn trường và ngành trước khi chạy lọc ảo.');
       return;
     }
+    
     setLoading(true);
-    setTimeout(() => {
-      const map = runVirtualFilter(applications, quotas);
-      setResultMap(map);
-      setLoading(false);
+    try {
+      const response = await virtualFilterApi.runVirtualFilter({
+        schoolId: selectedSchoolId,
+        majorId: selectedMajorId,
+        simulationMode: true,
+        maxResults: 100
+      });
+      
+      setResults(response.results);
+      setSummary(response.summary);
       message.success('Chạy lọc ảo thành công!');
-    }, 500);
+    } catch (error) {
+      console.error('Error running virtual filter:', error);
+      message.error('Không thể chạy lọc ảo. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const columns = [
@@ -188,19 +110,24 @@ const VirtualFilterPage: React.FC = () => {
     },
     {
       title: 'Mã thí sinh',
-      dataIndex: 'applicantId',
-      key: 'applicantId',
+      dataIndex: 'studentId',
+      key: 'studentId',
     },
     {
       title: 'Họ và tên',
-      dataIndex: 'fullName',
-      key: 'fullName',
+      dataIndex: 'studentName',
+      key: 'studentName',
+    },
+    {
+      title: 'CCCD',
+      dataIndex: 'cccd',
+      key: 'cccd',
     },
     {
       title: 'Điểm xét tuyển',
       dataIndex: 'totalScore',
       key: 'totalScore',
-      sorter: (a: Application, b: Application) => a.totalScore - b.totalScore,
+      sorter: (a: AdmissionResult, b: AdmissionResult) => a.totalScore - b.totalScore,
       render: (score: number) => <Text strong>{score.toFixed(2)}</Text>,
       align: 'center' as const,
     },
@@ -210,16 +137,52 @@ const VirtualFilterPage: React.FC = () => {
       key: 'priorityOrder',
       align: 'center' as const,
     },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'admissionStatus',
+      key: 'admissionStatus',
+      render: (status: string) => {
+        let color = '';
+        let text = '';
+        switch (status) {
+          case 'ADMITTED':
+            color = 'green';
+            text = 'Trúng tuyển';
+            break;
+          case 'WAITLIST':
+            color = 'orange';
+            text = 'Danh sách chờ';
+            break;
+          case 'REJECTED':
+            color = 'red';
+            text = 'Không trúng tuyển';
+            break;
+          default:
+            color = 'gray';
+            text = status;
+        }
+        return <Text style={{ color }}>{text}</Text>;
+      },
+      align: 'center' as const,
+    },
+    {
+      title: 'Thứ hạng',
+      dataIndex: 'rank',
+      key: 'rank',
+      align: 'center' as const,
+    },
   ];
 
   // Lấy danh sách thí sinh trúng tuyển của ngành trường được chọn
-  const admittedApplicants = selectedSchoolId && selectedMajorId
-    ? resultMap.get(`${selectedSchoolId}_${selectedMajorId}`) ?? []
-    : [];
+  const admittedApplicants = results.filter(r => 
+    r.schoolId === selectedSchoolId && 
+    r.majorId === selectedMajorId &&
+    r.admissionStatus === 'ADMITTED'
+  );
 
   // Tính điểm chuẩn (điểm thấp nhất trong danh sách trúng tuyển)
   const admissionScore = admittedApplicants.length > 0
-    ? admittedApplicants.reduce((min, app) => app.totalScore < min ? app.totalScore : min, admittedApplicants[0].totalScore)
+    ? Math.min(...admittedApplicants.map(app => app.totalScore))
     : null;
 
   return (
@@ -242,7 +205,7 @@ const VirtualFilterPage: React.FC = () => {
             </Select>
           </Col>
           <Col span={8}>
-            <label>Chọn Ngành</label>
+            <label>Chọn ngành</label>
             <Select
               placeholder="Chọn ngành"
               value={selectedMajorId}
@@ -265,16 +228,28 @@ const VirtualFilterPage: React.FC = () => {
 
       <Card>
         <Row gutter={16} style={{ marginBottom: 20 }}>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <Text>Số thí sinh trúng tuyển</Text>
               <Title level={3}>{admittedApplicants.length}</Title>
             </Card>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <Text>Điểm chuẩn dự kiến</Text>
               <Title level={3}>{admissionScore !== null ? admissionScore.toFixed(2) : 'N/A'}</Title>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Text>Tổng số thí sinh xét</Text>
+              <Title level={3}>{summary?.totalProcessed || 0}</Title>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Text>Điểm trung bình</Text>
+              <Title level={3}>{summary?.averageScore || 'N/A'}</Title>
             </Card>
           </Col>
         </Row>
@@ -282,9 +257,11 @@ const VirtualFilterPage: React.FC = () => {
         <Spin spinning={loading} tip="Đang chạy lọc ảo...">
           <Table
             columns={columns}
-            dataSource={admittedApplicants}
-            rowKey={(record) => record.applicantId + '_' + record.priorityOrder}
-            pagination={{ pageSize: 8 }}
+            dataSource={results.filter(r => 
+              r.schoolId === selectedSchoolId && r.majorId === selectedMajorId
+            )}
+            rowKey={(record) => record.studentId + '_' + record.majorId}
+            pagination={{ pageSize: 10 }}
           />
         </Spin>
       </Card>

@@ -102,8 +102,29 @@ export interface DocumentTypeStats {
 }
 
 export interface DocumentStats {
-  byType: DocumentTypeStats[];
-  summary: {
+  // Backend response format
+  total?: number;
+  approved?: number;
+  pending?: number;
+  rejected?: number;
+  approvalRate?: string;
+  breakdown?: {
+    personalInfo: {
+      total: number;
+      approved: number;
+      pending: number;
+      rejected: number;
+    };
+    scores: {
+      total: number;
+      approved: number;
+      pending: number;
+      rejected: number;
+    };
+  };
+  // Frontend expected format (for backward compatibility)
+  byType?: DocumentTypeStats[];
+  summary?: {
     totalDocuments: number;
     pendingDocuments: number;
     approvedDocuments: number;

@@ -6,7 +6,6 @@ import {
   Form,
   Input,
   Space,
-  Popconfirm,
   message,
   Select,
   Tag,
@@ -15,92 +14,66 @@ import {
 } from 'antd';
 import type { ColumnType } from 'antd/es/table';
 import {
-  EditOutlined,
-  DeleteOutlined,
   EyeOutlined,
-  SearchOutlined,
+  CheckOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
+import { adminApi, type AdminApplication, type ApplicationFilter } from '../../services/adminApi';
+import { applicationApi, type School, type Major, type AdmissionCombination } from '../../services/applicationApi';
 
 const { Option } = Select;
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
-// Định nghĩa kiểu dữ liệu cơ bản
-interface School {
-  id: string;
-  name: string;
-  code: string;
-}
-
-interface Major {
-  id: string;
-  name: string;
-  code: string;
-  schoolId: string;
-}
-
-interface AdmissionCombination {
-  id: string;
-  name: string; // Tên tổ hợp, ví dụ: A00, D01
-  subjects: string[]; // Danh sách các môn
-  majorId: string;
-  schoolId: string;
-}
-
-// Mình thêm 2 trường admissionMethod và organizingUnit
+// Định nghĩa kiểu dữ liệu sử dụng từ backend API
 interface StudentApplication {
   id: string;
-  cccd: string; // Sử dụng CCCD thay cho mã SV
+  cccd: string;
   studentName: string;
   schoolId: string;
   majorId: string;
-  combinationId?: string; // Tổ hợp có thể không có nếu là phương thức khác
-  admissionMethod: 'Điểm THPT / Học bạ' | 'Đánh giá năng lực / Tư duy';
-  organizingUnit?: string; // Chỉ có khi admissionMethod là Đánh giá năng lực / Tư duy
+  combinationId?: string;
+  admissionMethod: string;
+  organizingUnit?: string;
   priorityOrder: number;
   submissionDate: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  adminNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
-// Dữ liệu mẫu cập nhật
-const dummySchools: School[] = [
-  { id: '1', name: 'Đại học Bách Khoa Hà Nội', code: 'BKA' },
-  { id: '2', name: 'Đại học Quốc gia Hà Nội', code: 'QGHN' },
-  { id: '3', name: 'Đại học Ngoại Thương', code: 'NT' },
-];
-
-const dummyMajors: Major[] = [
-  { id: '101', name: 'Khoa học Máy tính', code: 'IT1', schoolId: '1' },
-  { id: '102', name: 'Kỹ thuật Điện tử Viễn thông', code: 'ET', schoolId: '1' },
-  { id: '103', name: 'Công nghệ thông tin', code: 'CNTT', schoolId: '2' },
-  { id: '201', name: 'Kinh tế Quốc tế', code: 'KTQT', schoolId: '3' },
-  { id: '202', name: 'Quản trị Kinh doanh', code: 'QTKD', schoolId: '3' },
-];
-
-const dummyCombinations: AdmissionCombination[] = [
-  { id: 'C001', name: 'A00', subjects: ['Toán', 'Lý', 'Hóa'], majorId: '101', schoolId: '1' },
-  { id: 'C002', name: 'A01', subjects: ['Toán', 'Lý', 'Anh'], majorId: '101', schoolId: '1' },
-  { id: 'C003', name: 'D07', subjects: ['Toán', 'Hóa', 'Anh'], majorId: '101', schoolId: '1' },
-  { id: 'C004', name: 'A00', subjects: ['Toán', 'Lý', 'Hóa'], majorId: '102', schoolId: '1' },
-  { id: 'C005', name: 'A01', subjects: ['Toán', 'Lý', 'Anh'], majorId: '102', schoolId: '1' },
-  { id: 'C006', name: 'A00', subjects: ['Toán', 'Lý', 'Hóa'], majorId: '103', schoolId: '2' },
-  { id: 'C007', name: 'D01', subjects: ['Toán', 'Văn', 'Anh'], majorId: '201', schoolId: '3' },
-  { id: 'C008', name: 'A00', subjects: ['Toán', 'Lý', 'Hóa'], majorId: '202', schoolId: '3' },
-];
-
-// Dữ liệu mẫu cập nhật theo cấu trúc mới
-const dummyStudentApplications: StudentApplication[] = [
-  { id: 'APP_NV001', cccd: '123456789012', studentName: 'Nguyễn Văn A', schoolId: '1', majorId: '101', combinationId: 'C001', admissionMethod: 'Điểm THPT / Học bạ', priorityOrder: 1, submissionDate: '2024-05-20' },
-  { id: 'APP_NV002', cccd: '123456789012', studentName: 'Nguyễn Văn A', schoolId: '1', majorId: '102', combinationId: 'C004', admissionMethod: 'Điểm THPT / Học bạ', priorityOrder: 2, submissionDate: '2024-05-20' },
-  { id: 'APP_NV003', cccd: '987654321098', studentName: 'Trần Thị B', schoolId: '3', majorId: '201', admissionMethod: 'Đánh giá năng lực / Tư duy', organizingUnit: 'ĐHQG Hà Nội', priorityOrder: 1, submissionDate: '2024-05-18' },
-  { id: 'APP_NV004', cccd: '456789012345', studentName: 'Lê Văn C', schoolId: '2', majorId: '103', combinationId: 'C006', admissionMethod: 'Điểm THPT / Học bạ', priorityOrder: 1, submissionDate: '2024-05-15' },
-  { id: 'APP_NV005', cccd: '789012345678', studentName: 'Phạm Thị D', schoolId: '1', majorId: '101', combinationId: 'C002', admissionMethod: 'Điểm THPT / Học bạ', priorityOrder: 1, submissionDate: '2024-05-22' },
-  { id: 'APP_NV006', cccd: '321098765432', studentName: 'Hoàng Văn E', schoolId: '3', majorId: '202', combinationId: 'C008', admissionMethod: 'Điểm THPT / Học bạ', priorityOrder: 1, submissionDate: '2024-05-21' },
-];
+// Transform AdminApplication to StudentApplication for table display
+const transformAdminApplication = (adminApp: AdminApplication): StudentApplication => ({
+  id: adminApp.id,
+  cccd: adminApp.student.user.cccd,
+  studentName: adminApp.student.user.fullName,
+  schoolId: adminApp.schoolId,
+  majorId: adminApp.majorId,
+  combinationId: adminApp.combinationId,
+  admissionMethod: adminApp.admissionMethod,
+  organizingUnit: adminApp.organizingUnit,
+  priorityOrder: adminApp.priorityOrder,
+  submissionDate: adminApp.submissionDate,
+  status: adminApp.status,
+  adminNote: adminApp.adminNote,
+  reviewedAt: adminApp.reviewedAt,
+  reviewedBy: adminApp.reviewedBy,
+});
 
 const AdminManageApplicationsPage: React.FC = () => {
   const [applications, setApplications] = useState<StudentApplication[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [majors, setMajors] = useState<Major[]>([]);
   const [combinations, setCombinations] = useState<AdmissionCombination[]>([]);
+
+  // Debug log to track schools state changes
+  useEffect(() => {
+    console.log('🏫 Schools state updated:', schools);
+    console.log('📊 Current schools count:', schools.length);
+    if (schools.length > 0) {
+      console.log('🎯 Schools list:', schools.map(s => `${s.name} (${s.code})`));
+    }
+  }, [schools]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingApplication, setEditingApplication] = useState<StudentApplication | null>(null);
@@ -110,8 +83,11 @@ const AdminManageApplicationsPage: React.FC = () => {
   // Filters
   const [filterSchoolId, setFilterSchoolId] = useState<string | undefined>(undefined);
   const [filterMajorId, setFilterMajorId] = useState<string | undefined>(undefined);
-  // Bỏ filter trạng thái vì không cần
-  const [searchText, setSearchText] = useState('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
   // States cho dropdown trong Modal (để thêm/sửa)
   const [modalSelectedSchoolId, setModalSelectedSchoolId] = useState<string | undefined>(undefined);
@@ -119,19 +95,66 @@ const AdminManageApplicationsPage: React.FC = () => {
   const [modalFilteredMajors, setModalFilteredMajors] = useState<Major[]>([]);
   const [modalFilteredCombinations, setModalFilteredCombinations] = useState<AdmissionCombination[]>([]);
 
+  // Load data from backend APIs
   useEffect(() => {
-    setLoading(true);
-    // Giả lập tải dữ liệu từ API
-    const fetchData = async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSchools(dummySchools);
-      setMajors(dummyMajors);
-      setCombinations(dummyCombinations);
-      setApplications(dummyStudentApplications);
-      setLoading(false);
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        console.log('🔍 Starting to fetch initial data...');
+        const [schoolsData, majorsData, combinationsData] = await Promise.all([
+          applicationApi.getSchools(),
+          applicationApi.getMajors(),
+          applicationApi.getAdmissionCombinations(),
+        ]);
+        
+        console.log('📚 Schools data received:', schoolsData);
+        console.log('🎓 Number of schools:', schoolsData.length);
+        console.log('🏢 School names:', schoolsData.map(s => `${s.name} (${s.code})`));
+        
+        setSchools(schoolsData);
+        setMajors(majorsData);
+        setCombinations(combinationsData);
+        
+        console.log('✅ State updated successfully');
+      } catch (error) {
+        console.error('❌ Error loading initial data:', error);
+        message.error('Có lỗi khi tải dữ liệu cơ bản');
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchData();
+
+    fetchInitialData();
   }, []);
+
+  // Load applications with filters
+  const fetchApplications = async () => {
+    setLoading(true);
+    try {
+      const filters: ApplicationFilter = {
+        page: currentPage,
+        limit: pageSize,
+        schoolId: filterSchoolId,
+        majorId: filterMajorId,
+      };
+
+      const response = await adminApi.getApplications(filters);
+      const transformedApplications = response.applications.map(transformAdminApplication);
+      
+      setApplications(transformedApplications);
+      setTotal(response.pagination.total);
+    } catch (error) {
+      console.error('Error loading applications:', error);
+      message.error('Có lỗi khi tải danh sách nguyện vọng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch applications when filters or pagination changes
+  useEffect(() => {
+    fetchApplications();
+  }, [currentPage, pageSize, filterSchoolId, filterMajorId]);
 
   // Lọc ngành theo trường cho modal
   useEffect(() => {
@@ -154,45 +177,66 @@ const AdminManageApplicationsPage: React.FC = () => {
   // Lọc tổ hợp theo ngành cho modal
   useEffect(() => {
     if (modalSelectedMajorId) {
-      setModalFilteredCombinations(combinations.filter(combo => combo.majorId === modalSelectedMajorId));
-      if (editingApplication && editingApplication.majorId === modalSelectedMajorId) {
-        form.setFieldsValue({ combinationId: editingApplication.combinationId });
-      } else {
-        form.setFieldsValue({ combinationId: undefined });
-      }
+      const fetchCombinations = async () => {
+        try {
+          const combinationsData = await applicationApi.getMajorCombinations(modalSelectedMajorId);
+          setModalFilteredCombinations(combinationsData);
+          
+          if (editingApplication && editingApplication.majorId === modalSelectedMajorId) {
+            form.setFieldsValue({ combinationId: editingApplication.combinationId });
+          } else {
+            form.setFieldsValue({ combinationId: undefined });
+          }
+        } catch (error) {
+          console.error('Error loading combinations:', error);
+        }
+      };
+      
+      fetchCombinations();
     } else {
       setModalFilteredCombinations([]);
       form.setFieldsValue({ combinationId: undefined });
     }
-  }, [modalSelectedMajorId, combinations, editingApplication, form]);
+  }, [modalSelectedMajorId, editingApplication, form]);
 
   // Hàm ánh xạ ID sang tên
   const getSchoolName = (id: string) => schools.find(s => s.id === id)?.name || 'N/A';
   const getMajorName = (id: string) => majors.find(m => m.id === id)?.name || 'N/A';
   const getCombinationName = (id: string) => combinations.find(c => c.id === id)?.name || 'N/A';
 
-  // Lọc và tìm kiếm dữ liệu bảng chính
-  const filteredApplications = useMemo(() => {
-    let result = applications;
+  // No client-side filtering - backend handles filtering via API
+  const displayApplications = applications;
 
-    if (filterSchoolId) {
-      result = result.filter(app => app.schoolId === filterSchoolId);
+  // Handle application approval
+  const handleApproveApplication = async (id: string) => {
+    try {
+      setLoading(true);
+      await adminApi.approveApplication(id, { adminNote: 'Approved by admin' });
+      message.success('Đã duyệt nguyện vọng thành công!');
+      fetchApplications(); // Refresh the list
+    } catch (error) {
+      console.error('Error approving application:', error);
+      message.error('Có lỗi khi duyệt nguyện vọng');
+    } finally {
+      setLoading(false);
     }
-    if (filterMajorId) {
-      result = result.filter(app => app.majorId === filterMajorId);
-    }
-    if (searchText) {
-      result = result.filter(app =>
-        app.studentName.toLowerCase().includes(searchText.toLowerCase()) ||
-        app.cccd.toLowerCase().includes(searchText.toLowerCase()) ||
-        getSchoolName(app.schoolId).toLowerCase().includes(searchText.toLowerCase()) ||
-        getMajorName(app.majorId).toLowerCase().includes(searchText.toLowerCase())
-      );
-    }
-    return result;
-  }, [applications, filterSchoolId, filterMajorId, searchText, getSchoolName, getMajorName]);
+  };
 
-  // Không có chức năng thêm, chỉ có sửa và xóa
+  // Handle application rejection
+  const handleRejectApplication = async (id: string) => {
+    try {
+      setLoading(true);
+      await adminApi.rejectApplication(id, { adminNote: 'Rejected by admin' });
+      message.success('Đã từ chối nguyện vọng!');
+      fetchApplications(); // Refresh the list
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      message.error('Có lỗi khi từ chối nguyện vọng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Mở modal sửa nguyện vọng
   const handleEditApplication = (record: StudentApplication) => {
     setEditingApplication(record);
@@ -202,38 +246,9 @@ const AdminManageApplicationsPage: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  // Xóa nguyện vọng
-  const handleDeleteApplication = (id: string) => {
-    setLoading(true);
-    setTimeout(() => {
-      setApplications(applications.filter(app => app.id !== id));
-      message.success('Xóa nguyện vọng thành công!');
-      setLoading(false);
-    }, 300);
-  };
 
-  // Xử lý khi submit form (chỉ sửa)
-  const handleOk = async () => {
-    try {
-      const values = await form.validateFields();
-      setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
 
-      if (editingApplication) {
-        const updatedApplications = applications.map(app =>
-          app.id === editingApplication.id ? { ...app, ...values } : app
-        );
-        setApplications(updatedApplications);
-        message.success('Cập nhật nguyện vọng thành công!');
-      }
-      setIsModalVisible(false);
-      setLoading(false);
-    } catch (errorInfo) {
-      console.log('Validate Failed:', errorInfo);
-      message.error('Vui lòng điền đầy đủ và đúng thông tin!');
-      setLoading(false);
-    }
-  };
+
 
   const handleCancel = () => {
     setIsModalVisible(false);
@@ -245,19 +260,8 @@ const AdminManageApplicationsPage: React.FC = () => {
     return filterSchoolId ? majors.filter(major => major.schoolId === filterSchoolId) : majors;
   }, [filterSchoolId, majors]);
 
-  // Cột bảng đã chỉnh sửa theo yêu cầu
-  interface TableColumn extends ColumnType<StudentApplication> {
-    title: string;
-    dataIndex?: keyof StudentApplication | string;
-    key: string;
-  }
-
-  interface FilterOption {
-    text: string;
-    value: string;
-  }
-
-  const columns: TableColumn[] = [
+  // Remove unused interface
+  const columns: ColumnType<StudentApplication>[] = [
     {
       title: 'Mã NV',
       dataIndex: 'id',
@@ -308,30 +312,58 @@ const AdminManageApplicationsPage: React.FC = () => {
       align: 'center' as const,
     },
     {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      align: 'center' as const,
+      render: (status: string) => {
+        const statusConfig = {
+          'PENDING': { color: 'orange', text: 'Chờ duyệt' },
+          'APPROVED': { color: 'green', text: 'Đã duyệt' },
+          'REJECTED': { color: 'red', text: 'Từ chối' },
+        };
+        const config = statusConfig[status as keyof typeof statusConfig] || { color: 'gray', text: status };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+    {
       title: 'Hành động',
       key: 'actions',
       render: (_: any, record: StudentApplication) => (
         <Space size="middle">
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => handleEditApplication(record)}
-            type="primary"
-          >
-            Sửa
-          </Button>
-          <Popconfirm
-            title="Bạn có chắc chắn muốn xóa nguyện vọng này?"
-            onConfirm={() => handleDeleteApplication(record.id)}
-            okText="Có"
-            cancelText="Không"
-          >
+          {record.status === 'PENDING' && (
+            <>
+              <Tooltip title="Duyệt nguyện vọng">
+                <Button
+                  icon={<CheckOutlined />}
+                  onClick={() => handleApproveApplication(record.id)}
+                  type="primary"
+                  size="small"
+                >
+                  Duyệt
+                </Button>
+              </Tooltip>
+              <Tooltip title="Từ chối nguyện vọng">
+                <Button
+                  icon={<CloseOutlined />}
+                  onClick={() => handleRejectApplication(record.id)}
+                  danger
+                  size="small"
+                >
+                  Từ chối
+                </Button>
+              </Tooltip>
+            </>
+          )}
+          <Tooltip title="Xem chi tiết">
             <Button
-              icon={<DeleteOutlined />}
-              danger
+              icon={<EyeOutlined />}
+              onClick={() => handleEditApplication(record)}
+              size="small"
             >
-              Xóa
+              Chi tiết
             </Button>
-          </Popconfirm>
+          </Tooltip>
         </Space>
       ),
     },
@@ -342,13 +374,6 @@ const AdminManageApplicationsPage: React.FC = () => {
       <Title level={3}>Quản lý Nguyện vọng Đăng ký</Title>
 
       <Space style={{ marginBottom: 16 }}>
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="Tìm kiếm theo SV, CCCD, trường, ngành..."
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          style={{ width: 300 }}
-        />
         <Select
           placeholder="Lọc theo Trường"
           style={{ width: 200 }}
@@ -394,9 +419,22 @@ const AdminManageApplicationsPage: React.FC = () => {
 
       <Table
         columns={columns}
-        dataSource={filteredApplications}
+        dataSource={displayApplications}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          current: currentPage,
+          pageSize: pageSize,
+          total: total,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} nguyện vọng`,
+          onChange: (page, size) => {
+            setCurrentPage(page);
+            if (size !== pageSize) {
+              setPageSize(size);
+            }
+          }
+        }}
         bordered
         loading={loading}
         locale={{ emptyText: 'Không có nguyện vọng nào phù hợp.' }}
@@ -404,12 +442,12 @@ const AdminManageApplicationsPage: React.FC = () => {
 
       {/* Bỏ modal thêm vì không có quyền thêm, chỉ có sửa */}
       <Modal
-        title="Chỉnh sửa Nguyện vọng"
+        title="Chi tiết Nguyện vọng"
         visible={isModalVisible}
-        onOk={handleOk}
+        onOk={handleCancel}
         onCancel={handleCancel}
-        okText="Cập nhật"
-        cancelText="Hủy"
+        okText="Đóng"
+        cancelButtonProps={{ style: { display: 'none' } }}
         confirmLoading={loading}
       >
         <Form
@@ -421,29 +459,23 @@ const AdminManageApplicationsPage: React.FC = () => {
           <Form.Item
             name="cccd"
             label="CCCD"
-            rules={[{ required: true, message: 'Vui lòng nhập CCCD!' }]}
           >
             <Input disabled placeholder="CCCD của thí sinh" />
           </Form.Item>
           <Form.Item
             name="studentName"
             label="Họ và tên Sinh viên"
-            rules={[{ required: true, message: 'Vui lòng nhập họ và tên sinh viên!' }]}
           >
-            <Input placeholder="Tên của thí sinh" />
+            <Input disabled placeholder="Tên của thí sinh" />
           </Form.Item>
 
           <Form.Item
             name="schoolId"
             label="Trường"
-            rules={[{ required: true, message: 'Vui lòng chọn trường!' }]}
           >
             <Select
+              disabled
               placeholder="Chọn trường"
-              onChange={value => {
-                setModalSelectedSchoolId(value);
-                form.setFieldsValue({ majorId: undefined, combinationId: undefined, admissionMethod: undefined, organizingUnit: undefined });
-              }}
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
@@ -461,15 +493,10 @@ const AdminManageApplicationsPage: React.FC = () => {
           <Form.Item
             name="majorId"
             label="Ngành"
-            rules={[{ required: true, message: 'Vui lòng chọn ngành!' }]}
           >
             <Select
+              disabled
               placeholder="Chọn ngành"
-              onChange={value => {
-                setModalSelectedMajorId(value);
-                form.setFieldsValue({ combinationId: undefined });
-              }}
-              disabled={!modalSelectedSchoolId}
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) =>
@@ -487,14 +514,10 @@ const AdminManageApplicationsPage: React.FC = () => {
           <Form.Item
             name="admissionMethod"
             label="Phương thức xét tuyển"
-            rules={[{ required: true, message: 'Vui lòng chọn phương thức xét tuyển!' }]}
           >
             <Select
+              disabled
               placeholder="Chọn phương thức xét tuyển"
-              onChange={value => {
-                // Khi đổi phương thức xét tuyển thì reset tổ hợp và đơn vị tổ chức
-                form.setFieldsValue({ combinationId: undefined, organizingUnit: undefined });
-              }}
             >
               <Option value="Điểm THPT / Học bạ">Điểm THPT / Học bạ</Option>
               <Option value="Đánh giá năng lực / Tư duy">Đánh giá năng lực / Tư duy</Option>
@@ -506,11 +529,10 @@ const AdminManageApplicationsPage: React.FC = () => {
             <Form.Item
               name="combinationId"
               label="Tổ hợp xét tuyển"
-              rules={[{ required: true, message: 'Vui lòng chọn tổ hợp xét tuyển!' }]}
             >
               <Select
+                disabled
                 placeholder="Chọn tổ hợp"
-                disabled={!modalSelectedMajorId}
                 showSearch
                 optionFilterProp="children"
                 filterOption={(input, option) =>
@@ -531,21 +553,16 @@ const AdminManageApplicationsPage: React.FC = () => {
             <Form.Item
               name="organizingUnit"
               label="Đơn vị tổ chức"
-              rules={[{ required: true, message: 'Vui lòng nhập đơn vị tổ chức!' }]}
             >
-              <Input placeholder="Nhập đơn vị tổ chức" />
+              <Input disabled placeholder="Nhập đơn vị tổ chức" />
             </Form.Item>
           )}
 
           <Form.Item
             name="priorityOrder"
             label="Thứ tự Nguyện vọng"
-            rules={[
-              { required: true, message: 'Vui lòng nhập thứ tự nguyện vọng!' },
-              { type: 'number', min: 1, message: 'Thứ tự phải là số và lớn hơn 0!' }
-            ]}
           >
-            <Input type="number" min={1} />
+            <Input disabled type="number" min={1} />
           </Form.Item>
         </Form>
       </Modal>
