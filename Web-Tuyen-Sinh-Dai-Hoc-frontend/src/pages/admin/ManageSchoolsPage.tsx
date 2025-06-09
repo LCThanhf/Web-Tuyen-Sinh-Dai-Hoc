@@ -117,9 +117,11 @@ const ManageSchoolsPage: React.FC = () => {
       const schoolData = {
         name: values.name,
         code: generateSchoolCode(values.name),
-        totalQuota: 0, // Default value, can be updated later
+        totalQuota: 1000, // Default value, can be updated later when majors are added
         admissionMethods: updatedAdmissionMethods,
       };
+
+      console.log('Sending school data:', schoolData);
 
       if (editingSchool) {
         await adminApi.updateSchool(editingSchool.id, schoolData);
