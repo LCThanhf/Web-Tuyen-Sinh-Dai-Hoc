@@ -24,8 +24,7 @@ interface Major {
       name: string;
       subjects: string[];
     };
-  }>;
-  _count: {
+  }>;  _count?: {
     applications: number;
   };
 }
@@ -140,43 +139,45 @@ const ManageMajorsPage: React.FC = () => {
       message.error(error.response?.data?.message || 'Không thể xóa ngành. Vui lòng thử lại!');
     }
   };
-
   // Handle form submission (add or update)
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
       
-      if (editingMajor) {
+      const majorData = {
+        name: values.name,
+        code: values.code,
+        schoolId: values.schoolId,
+        quota: values.quota,
+        admissionCombinationIds: values.admissionCombinationIds || []
+      };
+
+      console.log('Sending major data:', majorData);
+        if (editingMajor) {
         // Update existing major
-        const updatedMajor = await adminApi.updateMajor(editingMajor.id, {
-          name: values.name,
-          code: values.code,
-          schoolId: values.schoolId,
-          quota: values.quota,
-          admissionCombinationIds: values.admissionCombinationIds || []
-        });
+        const updatedMajor = await adminApi.updateMajor(editingMajor.id, majorData);
         
         setMajors(majors.map(major =>
-          major.id === editingMajor.id ? updatedMajor : major
+          major.id === editingMajor.id ? { ...updatedMajor, _count: major._count } : major
         ));
         message.success('Cập nhật ngành thành công!');
       } else {
         // Create new major
-        const newMajor = await adminApi.createMajor({
-          name: values.name,
-          code: values.code,
-          schoolId: values.schoolId,
-          quota: values.quota,
-          admissionCombinationIds: values.admissionCombinationIds || []
-        });
+        const newMajor = await adminApi.createMajor(majorData);
         
-        setMajors([...majors, newMajor]);
+        // Add _count field for consistency with table display
+        const majorWithCount = { 
+          ...newMajor, 
+          _count: { applications: 0 } 
+        };
+        
+        setMajors([...majors, majorWithCount]);
         message.success('Thêm ngành mới thành công!');
       }
-      
-      setIsModalVisible(false);
+        setIsModalVisible(false);
     } catch (error: any) {
       console.error('Error saving major:', error);
+      console.error('Error response:', error.response?.data);
       message.error(error.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại!');
     }
   };
@@ -239,12 +240,11 @@ const ManageMajorsPage: React.FC = () => {
       dataIndex: 'quota',
       key: 'quota',
       sorter: (a: Major, b: Major) => a.quota - b.quota,
-    },
-    {
+    },    {
       title: 'Số đơn đăng ký',
       key: 'applications',
-      render: (_: any, record: Major) => record._count.applications,
-      sorter: (a: Major, b: Major) => a._count.applications - b._count.applications,
+      render: (_: any, record: Major) => record._count?.applications || 0,
+      sorter: (a: Major, b: Major) => (a._count?.applications || 0) - (b._count?.applications || 0),
     },
     {
       title: 'Tổ hợp xét tuyển',
