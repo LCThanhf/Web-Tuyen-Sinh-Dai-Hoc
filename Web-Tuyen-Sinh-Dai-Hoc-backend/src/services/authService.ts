@@ -197,4 +197,53 @@ export class AuthService {
       throw error;
     }
   }
+
+  static async updateProfile(userId: string, updateData: { fullName?: string; email?: string; phone?: string }) {
+    try {
+      // Check if user exists
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!existingUser) {
+        throw new Error('User not found');
+      }
+
+      // Check if email is being changed and if it conflicts with another user
+      if (updateData.email && updateData.email !== existingUser.email) {
+        const emailConflict = await prisma.user.findUnique({
+          where: { email: updateData.email }
+        });
+
+        if (emailConflict) {
+          throw new Error('Email already in use by another account');
+        }
+      }
+
+      // Update user profile
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(updateData.fullName && { fullName: updateData.fullName }),
+          ...(updateData.email && { email: updateData.email }),
+          ...(updateData.phone && { phone: updateData.phone }),
+        },
+        select: {
+          id: true,
+          cccd: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      return updatedUser;
+    } catch (error) {
+      throw error;
+    }
+  }
 }

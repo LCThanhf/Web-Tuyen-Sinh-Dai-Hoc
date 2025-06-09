@@ -50,6 +50,12 @@ export const authApi = {
     return response.data.data;
   },
 
+  // Update current user profile
+  updateProfile: async (profileData: { fullName: string; email: string; phone: string }): Promise<{ user: User }> => {
+    const response = await apiClient.put<ApiResponse<{ user: User }>>('/auth/profile', profileData);
+    return response.data.data;
+  },
+
   // Logout user
   logout: async (): Promise<{ message: string }> => {
     const response = await apiClient.post<ApiResponse<{ message: string }>>('/auth/logout');

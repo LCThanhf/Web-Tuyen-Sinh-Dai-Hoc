@@ -152,4 +152,67 @@ export class AuthController {
       });
     }
   }
+
+  static async updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+        return;
+      }
+
+      const { fullName, email, phone } = req.body;
+
+      // Validate required fields
+      if (!fullName || !email || !phone) {
+        res.status(400).json({
+          success: false,
+          message: 'Full name, email, and phone are required'
+        });
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+        return;
+      }
+
+      const updatedUser = await AuthService.updateProfile(req.user.userId, {
+        fullName,
+        email,
+        phone
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: { user: updatedUser }
+      });
+    } catch (error: any) {
+      console.error('Update profile error:', error);
+      
+      let statusCode = 500;
+      let message = 'Internal server error';
+
+      if (error.message.includes('Email already in use')) {
+        statusCode = 409;
+        message = 'Email already in use by another account';
+      } else if (error.message.includes('User not found')) {
+        statusCode = 404;
+        message = 'User not found';
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message: message
+      });
+    }
+  }
 }

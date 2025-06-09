@@ -33,6 +33,7 @@ router.post('/login', authLimiter, validateLogin, AuthController.login);
 
 // Protected routes
 router.get('/profile', authenticateToken, AuthController.getProfile);
+router.put('/profile', authenticateToken, AuthController.updateProfile);
 router.post('/logout', authenticateToken, AuthController.logout);
 router.post('/refresh', authenticateToken, AuthController.refreshToken);
 

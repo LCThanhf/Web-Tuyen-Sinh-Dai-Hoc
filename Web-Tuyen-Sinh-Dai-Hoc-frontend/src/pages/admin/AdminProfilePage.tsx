@@ -1,63 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, message, Card, Spin, Space, Typography, Row, Col } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
+import { authApi } from '../../services/authApi';
+import type { User } from '../../services/authApi';
 
 const { Title, Text } = Typography;
-
-// Định nghĩa kiểu dữ liệu cho thông tin Admin
-interface AdminProfile {
-  id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  role: string; // Ví dụ: 'SuperAdmin', 'Officer', 'Viewer'
-  lastLogin?: string; // Ngày đăng nhập gần nhất
-}
 
 const AdminProfilePage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+  const [adminProfile, setAdminProfile] = useState<User | null>(null);
 
-  // Giả lập tải dữ liệu thông tin Admin
+  // Load admin profile data from backend
   useEffect(() => {
     const fetchAdminProfile = async () => {
       setLoading(true);
-      // Giả lập API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      // Dữ liệu giả lập của Admin đang đăng nhập
-      const dummyData: AdminProfile = {
-        id: 'admin001',
-        username: 'admin.hust',
-        fullName: 'Nguyễn Minh Anh',
-        email: 'minhanh.nguyen@hust.edu.vn',
-        phone: '0901122334',
-        role: 'SuperAdmin',
-        lastLogin: '2025-05-29 09:30:00',
-      };
-      setAdminProfile(dummyData);
-      form.setFieldsValue(dummyData); // Set giá trị mặc định cho form
-      setLoading(false);
+      try {
+        const response = await authApi.getProfile();
+        setAdminProfile(response.user); // Extract user from response
+        form.setFieldsValue(response.user); // Set default values for form
+      } catch (error) {
+        console.error('Failed to fetch admin profile:', error);
+        message.error('Không thể tải thông tin profile. Vui lòng thử lại!');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchAdminProfile();
   }, [form]);
 
-  // Xử lý khi nhấn nút Lưu
-  const onFinish = async (values: AdminProfile) => {
+  // Handle save button click
+  const onFinish = async (values: Partial<User>) => {
     setLoading(true);
-    // Giả lập API call để cập nhật thông tin Admin
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Trong thực tế, bạn sẽ gửi `values` này lên API backend
-    // Ví dụ: await axios.put('/api/admin/profile', values);
-
-    setAdminProfile(values); // Cập nhật state với dữ liệu mới
-    message.success('Cập nhật thông tin cá nhân thành công!');
-    setIsEditing(false); // Tắt chế độ chỉnh sửa
-    setLoading(false);
+    try {
+      // Call real API to update profile
+      const updatedProfile = await authApi.updateProfile({
+        fullName: values.fullName!,
+        email: values.email!,
+        phone: values.phone!,
+      });
+      
+      setAdminProfile(updatedProfile.user); // Extract user from response
+      message.success('Cập nhật thông tin cá nhân thành công!');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      message.error('Cập nhật thông tin thất bại. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onFinishFailed = (errorInfo: any) => {
@@ -110,8 +103,8 @@ const AdminProfilePage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="Tên đăng nhập">
-                    <Text strong>{adminProfile.username}</Text>
+                  <Form.Item label="CCCD">
+                    <Text strong>{adminProfile.cccd}</Text>
                   </Form.Item>
                 </Col>
               </Row>
@@ -143,15 +136,26 @@ const AdminProfilePage: React.FC = () => {
                 <Input prefix={<PhoneOutlined />} disabled={!isEditing} />
               </Form.Item>
 
-              <Form.Item label="Chức vụ/Vai trò">
-                <Text strong>{adminProfile.role}</Text>
-              </Form.Item>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="Chức vụ/Vai trò">
+                    <Text strong>{adminProfile.role}</Text>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Trạng thái">
+                    <Text strong style={{ color: adminProfile.isActive ? '#52c41a' : '#ff4d4f' }}>
+                      {adminProfile.isActive ? 'Hoạt động' : 'Không hoạt động'}
+                    </Text>
+                  </Form.Item>
+                </Col>
+              </Row>
 
-              {adminProfile.lastLogin && (
-                <Form.Item label="Lần đăng nhập gần nhất">
-                  <Text type="secondary">{adminProfile.lastLogin}</Text>
-                </Form.Item>
-              )}
+              <Form.Item label="Ngày tạo tài khoản">
+                <Text type="secondary">
+                  {new Date(adminProfile.createdAt).toLocaleString('vi-VN')}
+                </Text>
+              </Form.Item>
 
               {/* Nếu không ở chế độ chỉnh sửa, các trường input sẽ disabled */}
               {/* Nút submit sẽ được đặt trong extra của Card */}
