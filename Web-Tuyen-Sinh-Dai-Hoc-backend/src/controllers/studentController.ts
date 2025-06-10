@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../types';
 import { validationResult } from 'express-validator';
+import path from 'path';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -343,6 +345,11 @@ export class StudentController {
         return;
       }
 
+      // Get existing achievement to preserve file URL
+      const existingAchievement = await prisma.achievement.findUnique({
+        where: { studentId: student.id }
+      });
+
       const achievement = await prisma.achievement.upsert({
         where: { studentId: student.id },
         update: {
@@ -350,7 +357,9 @@ export class StudentController {
           subject,
           year,
           level,
-          status: 'PENDING'
+          status: 'PENDING',
+          // Preserve existing file URL if it exists
+          file: existingAchievement?.file
         },
         create: {
           studentId: student.id,
@@ -421,6 +430,11 @@ export class StudentController {
         return;
       }
 
+      // Get existing certificate to preserve file URL
+      const existingCertificate = await prisma.certificate.findUnique({
+        where: { studentId: student.id }
+      });
+
       const certificate = await prisma.certificate.upsert({
         where: { studentId: student.id },
         update: {
@@ -430,7 +444,9 @@ export class StudentController {
           testCode,
           issuer,
           issuerOther,
-          status: 'PENDING'
+          status: 'PENDING',
+          // Preserve existing file URL if it exists
+          file: existingCertificate?.file
         },
         create: {
           studentId: student.id,
@@ -454,6 +470,129 @@ export class StudentController {
       res.status(500).json({
         success: false,
         message: 'Failed to update certificate information'
+      });
+    }
+  }
+
+  // File Upload Methods
+  static async uploadAchievementFile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+        return;
+      }
+
+      // Get student record
+      const student = await prisma.student.findUnique({
+        where: { userId }
+      });
+
+      if (!student) {
+        res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+        return;
+      }
+
+      // Generate file URL
+      const fileUrl = `/uploads/${file.fieldname}/${file.filename}`;
+
+      // Update achievement with file path
+      const achievement = await prisma.achievement.upsert({
+        where: { studentId: student.id },
+        update: {
+          file: fileUrl,
+          status: 'PENDING' // Reset status when file is uploaded
+        },
+        create: {
+          studentId: student.id,
+          type: 'none', // Default type, will be updated when form is submitted
+          file: fileUrl,
+          status: 'PENDING'
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Achievement file uploaded successfully',
+        data: {
+          fileUrl,
+          achievement
+        }
+      });
+    } catch (error) {
+      console.error('Upload achievement file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload achievement file'
+      });
+    }
+  }
+
+  static async uploadCertificateFile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+        return;
+      }
+
+      // Get student record
+      const student = await prisma.student.findUnique({
+        where: { userId }
+      });
+
+      if (!student) {
+        res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+        return;
+      }
+
+      // Generate file URL
+      const fileUrl = `/uploads/${file.fieldname}/${file.filename}`;
+
+      // Update certificate with file path
+      const certificate = await prisma.certificate.upsert({
+        where: { studentId: student.id },
+        update: {
+          file: fileUrl,
+          status: 'PENDING' // Reset status when file is uploaded
+        },
+        create: {
+          studentId: student.id,
+          type: 'None', // Default type, will be updated when form is submitted
+          file: fileUrl,
+          status: 'PENDING'
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Certificate file uploaded successfully',
+        data: {
+          fileUrl,
+          certificate
+        }
+      });
+    } catch (error) {
+      console.error('Upload certificate file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload certificate file'
       });
     }
   }

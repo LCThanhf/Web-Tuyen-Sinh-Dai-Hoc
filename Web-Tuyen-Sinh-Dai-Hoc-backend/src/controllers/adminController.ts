@@ -5,53 +5,75 @@ import { AuthenticatedRequest } from '../types';
 const prisma = new PrismaClient();
 
 export class AdminController {
-  // School Management lol
-  static async createSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { name, code, totalQuota, admissionMethods } = req.body;
+  // School Management
+ static async createSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { name, code, totalQuota, admissionMethods } = req.body;
 
-      // Check if school code already exists
-      const existingSchool = await prisma.school.findUnique({
-        where: { code }
+ const normalizedName = name.trim().normalize('NFC');
+    
+    console.log('Creating school with name:', normalizedName);
+    console.log('Name length:', normalizedName.length);
+
+    // Remove the unique name check - allow similar names
+    // We only need to ensure codes are unique
+
+    // Generate unique code if provided code already exists
+    let finalCode = code;
+    let counter = 1;
+    
+    while (true) {
+      const existingSchoolByCode = await prisma.school.findUnique({
+        where: { code: finalCode }
       });
-
-      if (existingSchool) {
-        res.status(409).json({
+      
+      if (!existingSchoolByCode) {
+        break; // Code is unique
+      }
+      
+      // Add number suffix to make it unique
+      finalCode = `${code}${counter}`;
+      counter++;
+      
+      // Safety check to prevent infinite loop
+      if (counter > 999) {
+        res.status(500).json({
           success: false,
-          message: 'School code already exists'
+          message: 'Unable to generate unique school code'
         });
         return;
       }
+    }
 
       // Create school with admission methods
-      const school = await prisma.school.create({
-        data: {
-          name,
-          code,
-          totalQuota: totalQuota || 0,
-          admissionMethods: {
-            create: admissionMethods || []
-          }
-        },
-        include: {
-          admissionMethods: true,
-          majors: true
+    const school = await prisma.school.create({
+      data: {
+        name: normalizedName,
+        code: finalCode,
+        totalQuota: totalQuota || 0,
+        admissionMethods: {
+          create: admissionMethods || []
         }
-      });
+      },
+      include: {
+        admissionMethods: true,
+        majors: true
+      }
+    });
 
-      res.status(201).json({
-        success: true,
-        message: 'School created successfully',
-        data: school
-      });
-    } catch (error: any) {
-      console.error('Create school error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to create school'
-      });
-    }
+    res.status(201).json({
+      success: true,
+      message: 'School created successfully',
+      data: school
+    });
+  } catch (error: any) {
+    console.error('Create school error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create school'
+    });
   }
+}
 
   static async getSchools(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -128,70 +150,89 @@ export class AdminController {
     }
   }
 
-  static async updateSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { name, code, totalQuota, admissionMethods } = req.body;
+ static async updateSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { name, code, totalQuota, admissionMethods } = req.body;
 
-      // Check if school exists
-      const existingSchool = await prisma.school.findUnique({
-        where: { id }
+    // Check if school exists
+    const existingSchool = await prisma.school.findUnique({
+      where: { id }
+    });
+
+    if (!existingSchool) {
+      res.status(404).json({
+        success: false,
+        message: 'School not found'
       });
+      return;
+    }
 
-      if (!existingSchool) {
-        res.status(404).json({
-          success: false,
-          message: 'School not found'
-        });
-        return;
-      }
+      
 
-      // Check if code is being changed and if it conflicts
+      // Generate unique code if provided code conflicts with other schools
+      let finalCode = code;
+      let counter = 1;
+      
       if (code !== existingSchool.code) {
-        const codeConflict = await prisma.school.findUnique({
-          where: { code }
-        });
-
-        if (codeConflict) {
-          res.status(409).json({
-            success: false,
-            message: 'School code already exists'
+        while (true) {
+          const codeConflict = await prisma.school.findFirst({
+            where: { 
+              code: finalCode,
+              id: { not: id } // Exclude current school
+            }
           });
-          return;
+          
+          if (!codeConflict) {
+            break; // Code is unique
+          }
+          
+          // Add number suffix to make it unique
+          finalCode = `${code}${counter}`;
+          counter++;
+          
+          // Safety check
+          if (counter > 999) {
+            res.status(500).json({
+              success: false,
+              message: 'Unable to generate unique school code'
+            });
+            return;
+          }
         }
       }
 
       // Update school
-      const school = await prisma.school.update({
-        where: { id },
-        data: {
-          name,
-          code,
-          totalQuota: totalQuota || 0,
-          admissionMethods: {
-            deleteMany: {},
-            create: admissionMethods || []
-          }
-        },
-        include: {
-          admissionMethods: true,
-          majors: true
+    const school = await prisma.school.update({
+      where: { id },
+      data: {
+        name: name.trim().normalize('NFC'),
+        code: finalCode,
+        totalQuota: totalQuota || 0,
+        admissionMethods: {
+          deleteMany: {},
+          create: admissionMethods || []
         }
-      });
+      },
+      include: {
+        admissionMethods: true,
+        majors: true
+      }
+    });
 
-      res.json({
-        success: true,
-        message: 'School updated successfully',
-        data: school
-      });
-    } catch (error: any) {
-      console.error('Update school error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update school'
-      });
-    }
+    res.json({
+      success: true,
+      message: 'School updated successfully',
+      data: school
+    });
+  } catch (error: any) {
+    console.error('Update school error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update school'
+    });
   }
+}
 
   static async deleteSchool(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -1529,7 +1570,8 @@ export class AdminController {
         success: false,
         message: 'Failed to reject application'
       });
-    }  }
+    }
+  }
 
   // Document-specific methods for admin routes compatibility
   static async getPersonalInfoDocuments(req: AuthenticatedRequest, res: Response): Promise<void> {

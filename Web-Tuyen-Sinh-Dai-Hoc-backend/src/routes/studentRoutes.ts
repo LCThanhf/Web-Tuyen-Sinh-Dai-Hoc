@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { StudentController } from '../controllers/studentController';
 import { ApplicationController } from '../controllers/applicationController';
 import { authenticateToken, requireStudent } from '../middleware/auth';
+import { uploadSingle } from '../middleware/upload';
 import { 
   validatePersonalInfo, 
   validateScore, 
@@ -29,10 +30,12 @@ router.put('/priority', validatePriority, StudentController.updatePriority);
 // Achievement routes
 router.get('/achievement', StudentController.getAchievement);
 router.put('/achievement', StudentController.updateAchievement);
+router.post('/achievement/upload', uploadSingle('achievementFile'), StudentController.uploadAchievementFile);
 
 // Certificate routes
 router.get('/certificate', StudentController.getCertificate);
 router.put('/certificate', StudentController.updateCertificate);
+router.post('/certificate/upload', uploadSingle('certificateFile'), StudentController.uploadCertificateFile);
 
 // Application routes
 router.get('/applications', ApplicationController.getApplications);

@@ -24,7 +24,8 @@ interface Major {
       name: string;
       subjects: string[];
     };
-  }>;  _count?: {
+  }>;  
+  _count?: {
     applications: number;
   };
 }
@@ -92,17 +93,76 @@ const ManageMajorsPage: React.FC = () => {
     fetchCombinations();
   }, []);
 
-  // Generate unique major code
-  const generateUniqueMajorCode = (existingMajors: Major[]): string => {
-    const prefix = 'NGANH_';
-    let newCode: string;
-    let isUnique = false;
-    do {
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      newCode = `${prefix}${randomNum}`;
-      isUnique = !existingMajors.some(major => major.code === newCode);
-    } while (!isUnique);
-    return newCode;
+  // Generate unique major code based on major name abbreviation
+  const generateUniqueMajorCode = (majorName: string, existingMajors: Major[]): string => {
+    if (!majorName) return '';
+    
+    // Replace Đ/đ with D/d and other Vietnamese characters
+    const replaced = majorName
+      .replace(/Đ/g, "D").replace(/đ/g, "d")
+      .replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A")
+      .replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a")
+      .replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E")
+      .replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e")
+      .replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I")
+      .replace(/ì|í|ị|ỉ|ĩ/g, "i")
+      .replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O")
+      .replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o")
+      .replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U")
+      .replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u")
+      .replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y")
+      .replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    
+    // Remove special characters except spaces and hyphens
+    const cleaned = replaced.replace(/[^A-Za-z0-9\s-]/g, " ");
+    
+    // Split into words and get first letter of each significant word
+    const words = cleaned
+      .trim()
+      .split(/\s+/)
+      .filter(word => word.length > 0)
+      // Filter out common connecting words
+      .filter(word => !['va', 'va', 'và', 'cua', 'của', 'tren', 'trên', 'trong', 'ngoai', 'ngoài'].includes(word.toLowerCase()));
+    
+    let baseCode = '';
+    
+    if (words.length === 1) {
+      // Single word: take first 4 characters
+      baseCode = words[0].substring(0, 4).toUpperCase();
+    } else if (words.length === 2) {
+      // Two words: take first 2 chars from each
+      baseCode = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+    } else if (words.length >= 3) {
+      // Three or more words: take first letter of each word up to 5 letters
+      baseCode = words
+        .slice(0, 5)
+        .map(word => word[0])
+        .join('')
+        .toUpperCase();
+    }
+    
+    // Ensure we have a valid base code
+    if (!baseCode || baseCode.length === 0) {
+      baseCode = 'NGANH';
+    }
+    
+    // Check if base code is unique
+    let finalCode = baseCode;
+    let counter = 1;
+    
+    while (existingMajors.some(major => major.code === finalCode)) {
+      if (counter < 10) {
+        finalCode = `${baseCode}${counter}`;
+      } else {
+        // If we have too many conflicts, add random number
+        const randomNum = Math.floor(10 + Math.random() * 90);
+        finalCode = `${baseCode}${randomNum}`;
+        break;
+      }
+      counter++;
+    }
+    
+    return finalCode;
   };
 
   // Open add major modal
@@ -110,10 +170,20 @@ const ManageMajorsPage: React.FC = () => {
     setEditingMajor(null);
     form.resetFields();
     form.setFieldsValue({ 
-      code: generateUniqueMajorCode(majors), 
+      code: '', // We'll generate this when name is entered
       admissionCombinationIds: [] 
     });
     setIsModalVisible(true);
+  };
+
+  // Handle major name change to auto-generate code
+  const handleMajorNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const majorName = e.target.value;
+    if (majorName && !editingMajor) {
+      // Only auto-generate for new majors, not when editing
+      const generatedCode = generateUniqueMajorCode(majorName, majors);
+      form.setFieldsValue({ code: generatedCode });
+    }
   };
 
   // Open edit major modal
@@ -139,6 +209,7 @@ const ManageMajorsPage: React.FC = () => {
       message.error(error.response?.data?.message || 'Không thể xóa ngành. Vui lòng thử lại!');
     }
   };
+
   // Handle form submission (add or update)
   const handleOk = async () => {
     try {
@@ -153,7 +224,7 @@ const ManageMajorsPage: React.FC = () => {
       };
 
       console.log('Sending major data:', majorData);
-        if (editingMajor) {
+      if (editingMajor) {
         // Update existing major
         const updatedMajor = await adminApi.updateMajor(editingMajor.id, majorData);
         
@@ -174,7 +245,7 @@ const ManageMajorsPage: React.FC = () => {
         setMajors([...majors, majorWithCount]);
         message.success('Thêm ngành mới thành công!');
       }
-        setIsModalVisible(false);
+      setIsModalVisible(false);
     } catch (error: any) {
       console.error('Error saving major:', error);
       console.error('Error response:', error.response?.data);
@@ -240,7 +311,8 @@ const ManageMajorsPage: React.FC = () => {
       dataIndex: 'quota',
       key: 'quota',
       sorter: (a: Major, b: Major) => a.quota - b.quota,
-    },    {
+    },    
+    {
       title: 'Số đơn đăng ký',
       key: 'applications',
       render: (_: any, record: Major) => record._count?.applications || 0,
@@ -373,7 +445,7 @@ const ManageMajorsPage: React.FC = () => {
             label="Tên Ngành"
             rules={[{ required: true, message: 'Vui lòng nhập tên ngành!' }]}
           >
-            <Input placeholder="Nhập tên ngành" />
+            <Input placeholder="Nhập tên ngành" onChange={handleMajorNameChange} />
           </Form.Item>
           
           <Form.Item
@@ -381,7 +453,7 @@ const ManageMajorsPage: React.FC = () => {
             label="Mã Ngành"
             rules={[{ required: true, message: 'Mã ngành là bắt buộc!' }]}
           >
-            <Input disabled placeholder="Mã ngành được sinh tự động" />
+            <Input placeholder="Mã ngành được sinh tự động từ tên ngành" />
           </Form.Item>
           
           <Form.Item

@@ -72,7 +72,7 @@ model PersonalInfo {
 
 model School {
   id                String              @id @default(uuid())
-  name              String              @unique
+  name              String
   code              String              @unique
   totalQuota        Int                 @default(0)
   isActive          Boolean             @default(true)

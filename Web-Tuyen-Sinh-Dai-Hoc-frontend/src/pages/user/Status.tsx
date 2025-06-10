@@ -324,25 +324,8 @@ const Status: React.FC = () => {
     { title: 'Trường', dataIndex: 'school', key: 'school', width: 180 },
     { title: 'Ngành', dataIndex: 'major', key: 'major', width: 180 },
     { title: 'Phương thức', dataIndex: 'method', key: 'method', width: 200 },
-    { 
-      title: 'Tổ hợp / Đơn vị tổ chức', 
-      key: 'comboOrUnit',
-      width: 200, 
-      render: (_: any, record: StatusApplication) => {
-        // For score-based methods, show combination
-        const isScoreBased = record.method === 'Điểm THPT' || 
-                            record.method === 'Học bạ' ||
-                            record.method === 'Điểm THPT / Học bạ';
-        
-        if (isScoreBased && record.combo) {
-          return record.combo;
-        } else if (!isScoreBased && record.unit) {
-          return record.unit;
-        } else {
-          return '-';
-        }
-      }
-    },
+    { title: 'Tổ hợp môn', dataIndex: 'combo', key: 'combo', width: 150, render: (t: any) => t || '-' },
+    { title: 'Đơn vị tổ chức', dataIndex: 'unit', key: 'unit', width: 200, render: (t: any) => t || '-' },
     { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 120, 
       render: (status: string) => {
         const statusMap = {

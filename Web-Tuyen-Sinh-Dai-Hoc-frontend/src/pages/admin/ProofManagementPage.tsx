@@ -26,6 +26,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { adminApi } from '../../services/adminApi';
+import FilePreviewModal from '../../components/FilePreviewModal';
 
 const { TabPane } = Tabs;
 const { Text, Title } = Typography;
@@ -48,6 +49,11 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
   const [total, setTotal] = useState(0);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // File preview modal state
+  const [filePreviewVisible, setFilePreviewVisible] = useState(false);
+  const [previewFileUrl, setPreviewFileUrl] = useState<string>('');
+  const [previewFileName, setPreviewFileName] = useState<string>('');
 
   // Status tag component
   const StatusTag: React.FC<{ status: string }> = ({ status }) => {
@@ -228,6 +234,17 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
     setModalVisible(true);
   };
 
+  // View file function
+  const handleViewFile = (fileUrl?: string, fileName?: string) => {
+    if (fileUrl) {
+      setPreviewFileUrl(fileUrl);
+      setPreviewFileName(fileName || 'file');
+      setFilePreviewVisible(true);
+    } else {
+      message.warning("Không có file minh chứng để xem.");
+    }
+  };
+
   // Get columns for table based on document type
   const getColumns = (): any[] => {
     const baseColumns: any[] = [
@@ -344,6 +361,25 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
           return typeMap[type] || type || 'N/A';
         },
       });
+      
+      baseColumns.splice(5, 0, {
+        title: 'File minh chứng',
+        dataIndex: 'file',
+        key: 'file',
+        render: (fileUrl: string, record: any) =>
+          fileUrl ? (
+            <Button 
+              type="link" 
+              icon={<EyeOutlined />} 
+              onClick={() => handleViewFile(fileUrl, `thành_tích_${record.student?.user?.fullName || 'hsg'}`)}
+              size="small"
+            >
+              Xem file
+            </Button>
+          ) : (
+            <Text type="secondary">Không có file</Text>
+          ),
+      });
     }
 
     if (currentTab === 'certificate') {
@@ -355,6 +391,25 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
           if (type === 'None') return 'Không có chứng chỉ';
           return type || 'N/A';
         },
+      });
+      
+      baseColumns.splice(5, 0, {
+        title: 'File minh chứng',
+        dataIndex: 'file',
+        key: 'file',
+        render: (fileUrl: string, record: any) =>
+          fileUrl ? (
+            <Button 
+              type="link" 
+              icon={<EyeOutlined />} 
+              onClick={() => handleViewFile(fileUrl, `chứng_chỉ_${record.student?.user?.fullName || 'certificate'}`)}
+              size="small"
+            >
+              Xem file
+            </Button>
+          ) : (
+            <Text type="secondary">Không có file</Text>
+          ),
       });
     }
 
@@ -600,6 +655,18 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
                   })()}</Text>
                 </Col>
               )}
+              {selectedDocument.file && (
+                <Col span={24}>
+                  <Text strong>File minh chứng: </Text>
+                  <Button 
+                    type="link" 
+                    icon={<EyeOutlined />} 
+                    onClick={() => handleViewFile(selectedDocument.file, `thành_tích_${selectedDocument.student?.user?.fullName || 'hsg'}`)}
+                  >
+                    Xem file minh chứng
+                  </Button>
+                </Col>
+              )}
             </>
           )}
           
@@ -631,6 +698,18 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
                 <Col span={12}>
                   <Text strong>Đơn vị cấp: </Text>
                   <Text>{selectedDocument.issuer === 'Other' ? selectedDocument.issuerOther : selectedDocument.issuer}</Text>
+                </Col>
+              )}
+              {selectedDocument.file && (
+                <Col span={24}>
+                  <Text strong>File minh chứng: </Text>
+                  <Button 
+                    type="link" 
+                    icon={<EyeOutlined />} 
+                    onClick={() => handleViewFile(selectedDocument.file, `chứng_chỉ_${selectedDocument.student?.user?.fullName || 'certificate'}`)}
+                  >
+                    Xem file chứng chỉ
+                  </Button>
                 </Col>
               )}
             </>
@@ -800,6 +879,15 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
       >
         {renderDocumentDetails()}
       </Modal>
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        visible={filePreviewVisible}
+        onClose={() => setFilePreviewVisible(false)}
+        fileUrl={previewFileUrl}
+        fileName={previewFileName}
+        title="Xem file minh chứng"
+      />
     </div>
   );
 };

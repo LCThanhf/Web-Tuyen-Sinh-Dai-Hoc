@@ -104,7 +104,6 @@ const MIN_TOEFL_ITP_SCORE = 513;
 const AchievementsCerts: React.FC = () => {
   const [hsgForm] = Form.useForm();
   const [certForm] = Form.useForm();
-
   const [achievementData, setAchievementData] = useState<Achievement | null>(null);
   const [certificateData, setCertificateData] = useState<Certificate | null>(null);
 
@@ -117,12 +116,24 @@ const AchievementsCerts: React.FC = () => {
   const [showHsgFormFields, setShowHsgFormFields] = useState(true);
   const [showCertFormFields, setShowCertFormFields] = useState(true);
   const [hsgAchievementType, setHsgAchievementType] = useState<string | undefined>(undefined);
-  const [showDonViKhacInput, setShowDonViKhacInput] = useState(false);
+  const [showDonViKhacInput, setShowDonViKhacInput] = useState(false);  // File upload states
+  const [selectedAchievementFile, setSelectedAchievementFile] = useState<File | null>(null);
+  const [selectedCertificateFile, setSelectedCertificateFile] = useState<File | null>(null);
+  const [uploadingAchievementFile, setUploadingAchievementFile] = useState(false);
+  const [uploadingCertificateFile, setUploadingCertificateFile] = useState(false);
 
-  // Load data from backend
-  useEffect(() => {
-    loadData();
-  }, []);  const loadData = async () => {
+  // File selection handlers
+  const handleAchievementFileSelect = (file: File) => {
+    setSelectedAchievementFile(file);
+    message.info('File đã được chọn. File sẽ được tải lên khi bạn lưu thành tích.');
+    return false; // Prevent automatic upload
+  };
+
+  const handleCertificateFileSelect = (file: File) => {
+    setSelectedCertificateFile(file);
+    message.info('File đã được chọn. File sẽ được tải lên khi bạn lưu chứng chỉ.');
+    return false; // Prevent automatic upload
+  };const loadData = async () => {
     setLoading(true);
     try {
       // Load achievement data directly from backend
@@ -150,6 +161,11 @@ const AchievementsCerts: React.FC = () => {
     }
   };
 
+  // Load data from backend
+  useEffect(() => {
+    loadData();
+  }, []);
+
   // -- HSG form logic --
   const handleHsgTypeChange = (value: string) => {
     setHsgAchievementType(value);
@@ -159,8 +175,7 @@ const AchievementsCerts: React.FC = () => {
     } else {
       setShowHsgFormFields(true);
     }
-  };
-  const onFinishHsg = async (values: any) => {
+  };  const onFinishHsg = async (values: any) => {
     if (achievementData && !editingAchievement) {
       message.warning("Bạn chỉ được khai báo một thành tích Học sinh Giỏi. Vui lòng sửa hoặc xóa bản ghi hiện có.");
       return;
@@ -169,19 +184,44 @@ const AchievementsCerts: React.FC = () => {
     try {
       setLoading(true);
       
+      // First upload file if there's a selected file
+      let fileUrl = null;
+      if (selectedAchievementFile) {
+        setUploadingAchievementFile(true);
+        const formData = new FormData();
+        formData.append('achievementFile', selectedAchievementFile);
+
+        const uploadResponse = await apiClient.post('/student/achievement/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data.success) {
+          fileUrl = uploadResponse.data.data.fileUrl;
+          message.success('Tải file minh chứng thành công!');
+        } else {
+          message.error('Không thể tải file lên. Vui lòng thử lại.');
+          return;
+        }
+        setUploadingAchievementFile(false);
+      }
+      
       // Map form values to backend structure
       const payload = {
         type: values.type,
         subject: values.subject,
         year: values.year,
         level: values.level,
-        // Note: file upload would need to be handled separately
+        // Include file URL if uploaded
+        ...(fileUrl && { file: fileUrl })
       };
 
       await apiClient.put('/student/achievement', payload);
       message.success(editingAchievement ? "Cập nhật Thành tích HSG thành công!" : "Lưu Thành tích HSG thành công!");
       
-      // Reload data
+      // Clear selected file and reload data
+      setSelectedAchievementFile(null);
       await loadData();
       
       hsgForm.resetFields();
@@ -193,6 +233,7 @@ const AchievementsCerts: React.FC = () => {
       message.error('Không thể lưu thành tích. Vui lòng thử lại.');
     } finally {
       setLoading(false);
+      setUploadingAchievementFile(false);
     }
   };
 
@@ -255,8 +296,7 @@ const AchievementsCerts: React.FC = () => {
     if (value !== "Other") {
       certForm.setFieldsValue({ issuerOther: undefined });
     }
-  };
-  const onFinishCert = async (values: any) => {
+  };  const onFinishCert = async (values: any) => {
     if (certificateData && !editingCertificate) {
       message.warning("Bạn chỉ được khai báo một chứng chỉ Tiếng Anh. Vui lòng sửa hoặc xóa bản ghi hiện có.");
       return;
@@ -264,6 +304,29 @@ const AchievementsCerts: React.FC = () => {
 
     try {
       setLoading(true);
+      
+      // First upload file if there's a selected file
+      let fileUrl = null;
+      if (selectedCertificateFile) {
+        setUploadingCertificateFile(true);
+        const formData = new FormData();
+        formData.append('certificateFile', selectedCertificateFile);
+
+        const uploadResponse = await apiClient.post('/student/certificate/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data.success) {
+          fileUrl = uploadResponse.data.data.fileUrl;
+          message.success('Tải file minh chứng thành công!');
+        } else {
+          message.error('Không thể tải file lên. Vui lòng thử lại.');
+          return;
+        }
+        setUploadingCertificateFile(false);
+      }
       
       // Map form values to backend structure
       const payload = {
@@ -273,13 +336,15 @@ const AchievementsCerts: React.FC = () => {
         testCode: values.testCode,
         issuer: values.issuer === "Other" ? values.issuerOther : values.issuer,
         issuerOther: values.issuer === "Other" ? values.issuerOther : undefined,
-        // Note: file upload would need to be handled separately
+        // Include file URL if uploaded
+        ...(fileUrl && { file: fileUrl })
       };
 
       await apiClient.put('/student/certificate', payload);
       message.success(editingCertificate ? "Cập nhật Chứng chỉ Tiếng Anh thành công!" : "Lưu Chứng chỉ Tiếng Anh thành công!");
       
-      // Reload data
+      // Clear selected file and reload data
+      setSelectedCertificateFile(null);
       await loadData();
       
       certForm.resetFields();
@@ -291,6 +356,7 @@ const AchievementsCerts: React.FC = () => {
       message.error('Không thể lưu chứng chỉ. Vui lòng thử lại.');
     } finally {
       setLoading(false);
+      setUploadingCertificateFile(false);
     }
   };
 
@@ -337,12 +403,22 @@ const AchievementsCerts: React.FC = () => {
         }
       },
     });
-  };
-
-  // Xem file
+  };  // Xem file - open directly in new window (simplified)
   const handleViewFile = (fileUrl?: string) => {
     if (fileUrl) {
-      window.open(fileUrl, "_blank");
+      // Simple URL construction for direct file access
+      const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5001';
+      
+      let fullUrl: string;
+      if (fileUrl.startsWith('http')) {
+        fullUrl = fileUrl;
+      } else {
+        // Direct file URL construction
+        fullUrl = `${baseUrl}${fileUrl}`;
+      }
+      
+      // Open directly in new window
+      window.open(fullUrl, '_blank');
     } else {
       message.warning("Không có file minh chứng để xem.");
     }
@@ -399,12 +475,10 @@ const AchievementsCerts: React.FC = () => {
             return text;
         }
       },
-    },
-    {
+    },    {
       title: "Bằng khen/GCN",
       dataIndex: "file",
-      key: "file",
-      render: (fileUrl: string) =>
+      key: "file",      render: (fileUrl: string) =>
         fileUrl ? (
           <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewFile(fileUrl)}>
             Xem file
@@ -478,12 +552,10 @@ const AchievementsCerts: React.FC = () => {
       key: "issuer",
       render: (text: string, record: Certificate) => 
         text === "Other" ? record.issuerOther : text,
-    },
-    {
+    },    {
       title: "Chứng chỉ",
       dataIndex: "file",
-      key: "file",
-      render: (fileUrl: string) =>
+      key: "file",      render: (fileUrl: string) =>
         fileUrl ? (
           <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewFile(fileUrl)}>
             Xem file
@@ -651,17 +723,54 @@ const AchievementsCerts: React.FC = () => {
                               </Option>
                             ))}
                         </Select>
-                      </Form.Item>
-
-                      <Form.Item
+                      </Form.Item>                      <Form.Item
                         label="Bằng khen/Giấy chứng nhận đính kèm"
                         name="file"
-                        valuePropName="fileList"
-                        getValueFromEvent={(e: any) => e && e.fileList}
                       >
-                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isHsgFormDisabled}>
-                          <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
-                        </Upload>
+                        <div>
+                          <Upload 
+                            beforeUpload={handleAchievementFileSelect}
+                            maxCount={1} 
+                            accept=".pdf,.jpg,.png" 
+                            disabled={isHsgFormDisabled}
+                            fileList={[]}
+                            showUploadList={false}
+                          >
+                            <Button icon={<UploadOutlined />} disabled={isHsgFormDisabled}>
+                              Chọn file minh chứng
+                            </Button>
+                          </Upload>
+                          {selectedAchievementFile && (
+                            <div style={{ marginTop: 8 }}>
+                              <Text>File đã chọn: {selectedAchievementFile.name}</Text>
+                              <Button 
+                                size="small" 
+                                style={{ marginLeft: 8 }}
+                                onClick={() => setSelectedAchievementFile(null)}
+                                disabled={isHsgFormDisabled}
+                              >
+                                Hủy
+                              </Button>
+                            </div>
+                          )}
+                          {achievementData?.file && !selectedAchievementFile && (
+                            <div style={{ marginTop: 8 }}>
+                              <Text type="success">File đã tải lên: </Text>                              <Button 
+                                type="link" 
+                                size="small"
+                                icon={<EyeOutlined />}
+                                onClick={() => handleViewFile(achievementData.file)}
+                              >
+                                Xem file
+                              </Button>
+                            </div>
+                          )}
+                          <div style={{ marginTop: 4 }}>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              File sẽ được tải lên khi bạn nhấn "Lưu Thành tích HSG"
+                            </Text>
+                          </div>
+                        </div>
                       </Form.Item>
                     </Col>
 
@@ -681,16 +790,14 @@ const AchievementsCerts: React.FC = () => {
                       </Form.Item>
                     </Col>
                   </Row>
-                )}
-
-                <Form.Item style={{ textAlign: "left", marginTop: 1 }}>
+                )}                <Form.Item style={{ textAlign: "left", marginTop: 1 }}>
                   <Button
                     type="primary"
                     htmlType="submit"
                     size="middle"
                     style={{ width: "186px" }}
                     disabled={isHsgFormDisabled && !editingAchievement}
-                    loading={loading}
+                    loading={loading || uploadingAchievementFile}
                   >
                     {editingAchievement ? "Cập nhật" : "Lưu Thành tích HSG"}
                   </Button>
@@ -805,17 +912,54 @@ const AchievementsCerts: React.FC = () => {
                           rules={[{ required: true, message: "Vui lòng chọn ngày cấp" }]}
                         >
                           <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" disabled={isCertFormDisabled} />
-                        </Form.Item>
-
-                        <Form.Item
+                        </Form.Item>                        <Form.Item
                           label="Chứng chỉ đính kèm (Bản scan/ảnh)"
                           name="file"
-                          valuePropName="fileList"
-                          getValueFromEvent={(e: any) => e && e.fileList}
                         >
-                          <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isCertFormDisabled}>
-                            <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
-                          </Upload>
+                          <div>
+                            <Upload 
+                              beforeUpload={handleCertificateFileSelect}
+                              maxCount={1} 
+                              accept=".pdf,.jpg,.png" 
+                              disabled={isCertFormDisabled}
+                              fileList={[]}
+                              showUploadList={false}
+                            >
+                              <Button icon={<UploadOutlined />} disabled={isCertFormDisabled}>
+                                Chọn file minh chứng
+                              </Button>
+                            </Upload>
+                            {selectedCertificateFile && (
+                              <div style={{ marginTop: 8 }}>
+                                <Text>File đã chọn: {selectedCertificateFile.name}</Text>
+                                <Button 
+                                  size="small" 
+                                  style={{ marginLeft: 8 }}
+                                  onClick={() => setSelectedCertificateFile(null)}
+                                  disabled={isCertFormDisabled}
+                                >
+                                  Hủy
+                                </Button>
+                              </div>
+                            )}
+                            {certificateData?.file && !selectedCertificateFile && (
+                              <div style={{ marginTop: 8 }}>
+                                <Text type="success">File đã tải lên: </Text>                                <Button 
+                                  type="link" 
+                                  size="small"
+                                  icon={<EyeOutlined />}
+                                  onClick={() => handleViewFile(certificateData.file)}
+                                >
+                                  Xem file
+                                </Button>
+                              </div>
+                            )}
+                            <div style={{ marginTop: 4 }}>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                File sẽ được tải lên khi bạn nhấn "Lưu Chứng chỉ TA"
+                              </Text>
+                            </div>
+                          </div>
                         </Form.Item>
                       </>
                     )}
@@ -862,15 +1006,14 @@ const AchievementsCerts: React.FC = () => {
                       </>
                     )}
                   </Col>
-                </Row>
-                <Form.Item style={{ textAlign: "left", marginTop: 1 }}>
+                </Row>                <Form.Item style={{ textAlign: "left", marginTop: 1 }}>
                   <Button
                     type="primary"
                     htmlType="submit"
                     size="middle"
                     style={{ width: "186px" }}
                     disabled={isCertFormDisabled && !editingCertificate}
-                    loading={loading}
+                    loading={loading || uploadingCertificateFile}
                   >
                     {editingCertificate ? "Cập nhật" : "Lưu Chứng chỉ TA"}
                   </Button>
@@ -903,8 +1046,7 @@ const AchievementsCerts: React.FC = () => {
                 <p style={{ textAlign: "center", marginTop: 20, color: "#888" }}>Chưa có chứng chỉ Tiếng Anh nào được khai báo.</p>
               )}
             </div>
-          </TabPane>
-        </Tabs>
+          </TabPane>        </Tabs>
       </div>
     </div>
   );

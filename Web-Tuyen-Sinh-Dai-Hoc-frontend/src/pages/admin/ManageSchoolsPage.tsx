@@ -46,21 +46,92 @@ const ManageSchoolsPage: React.FC = () => {
     fetchSchools();
   }, []);
 
-  const generateSchoolCode = (schoolName: string): string => {
+  // Generate unique school code based on school name abbreviation
+  const generateUniqueSchoolCode = (schoolName: string, existingSchools: School[], editingId?: string): string => {
     if (!schoolName) return '';
-    return schoolName
+    
+    // Replace Đ/đ with D/d and other Vietnamese characters
+    const replaced = schoolName
+      .replace(/Đ/g, "D").replace(/đ/g, "d")
+      .replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A")
+      .replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a")
+      .replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E")
+      .replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e")
+      .replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I")
+      .replace(/ì|í|ị|ỉ|ĩ/g, "i")
+      .replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O")
+      .replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o")
+      .replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U")
+      .replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u")
+      .replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y")
+      .replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    
+    // Remove special characters except spaces and hyphens
+    const cleaned = replaced.replace(/[^A-Za-z0-9\s-]/g, " ");
+    
+    // Split into words and get first letter of each significant word
+    const words = cleaned
       .trim()
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 3);
+      .split(/\s+/)
+      .filter(word => word.length > 0)
+      // Filter out common connecting words
+      .filter(word => !['va', 'và', 'cua', 'của', 'tren', 'trên', 'trong', 'ngoai', 'ngoài'].includes(word.toLowerCase()));
+    
+    let baseCode = '';
+    
+    if (words.length === 1) {
+      // Single word: take first 3 characters
+      baseCode = words[0].substring(0, 3).toUpperCase();
+    } else if (words.length >= 2) {
+      // Multiple words: take first letter of each word up to 3 letters
+      baseCode = words
+        .slice(0, 3)
+        .map(word => word[0])
+        .join('')
+        .toUpperCase();
+    }
+    
+    // Ensure we have a valid base code
+    if (!baseCode || baseCode.length === 0) {
+      baseCode = 'SCH';
+    }
+    
+    // Check if base code is unique
+    let finalCode = baseCode;
+    let counter = 1;
+    
+    while (existingSchools.some(school => school.code === finalCode && school.id !== editingId)) {
+      if (counter < 10) {
+        finalCode = `${baseCode}${counter}`;
+      } else {
+        // If we have too many conflicts, add random number
+        const randomNum = Math.floor(10 + Math.random() * 90);
+        finalCode = `${baseCode}${randomNum}`;
+        break;
+      }
+      counter++;
+    }
+    
+    return finalCode;
+  };
+
+  // Handle school name change to auto-generate code
+  const handleSchoolNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const schoolName = e.target.value;
+    if (schoolName && !editingSchool) {
+      // Only auto-generate for new schools, not when editing
+      const generatedCode = generateUniqueSchoolCode(schoolName, schools);
+      form.setFieldsValue({ code: generatedCode });
+    }
   };
 
   // Modal handlers
   const handleAddSchool = () => {
     setEditingSchool(null);
     form.resetFields();
+    form.setFieldsValue({ 
+      code: '' // We'll generate this when name is entered
+    });
     admissionMethodsForm.setFieldsValue({
       admissionMethods: [
         { name: 'Điểm THPT', percentage: null },
@@ -73,7 +144,10 @@ const ManageSchoolsPage: React.FC = () => {
 
   const handleEditSchool = (record: School) => {
     setEditingSchool(record);
-    form.setFieldsValue({ name: record.name });
+    form.setFieldsValue({ 
+      name: record.name,
+      code: record.code 
+    });
     admissionMethodsForm.setFieldsValue({
       admissionMethods: record.admissionMethods,
     });
@@ -116,7 +190,7 @@ const ManageSchoolsPage: React.FC = () => {
 
       const schoolData = {
         name: values.name,
-        code: generateSchoolCode(values.name),
+        code: values.code || generateUniqueSchoolCode(values.name, schools, editingSchool?.id),
         totalQuota: 1000, // Default value, can be updated later when majors are added
         admissionMethods: updatedAdmissionMethods,
       };
@@ -301,14 +375,22 @@ const ManageSchoolsPage: React.FC = () => {
           form={form}
           layout="vertical"
           name="school_form"
-          initialValues={editingSchool ? { name: editingSchool.name } : {}}
+          initialValues={editingSchool ? { name: editingSchool.name, code: editingSchool.code } : {}}
         >
           <Form.Item
             name="name"
             label="Tên Trường"
             rules={[{ required: true, message: 'Vui lòng nhập tên trường!' }]}
           >
-            <Input />
+            <Input placeholder="Nhập tên trường" onChange={handleSchoolNameChange} />
+          </Form.Item>
+          
+          <Form.Item
+            name="code"
+            label="Mã Trường"
+            rules={[{ required: true, message: 'Mã trường là bắt buộc!' }]}
+          >
+            <Input placeholder="Mã trường được sinh tự động từ tên trường" />
           </Form.Item>
         </Form>
 
