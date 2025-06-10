@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules", 
+    "dist",
+    "src/controllers/analyticsController_phase3.ts",
+    "src/controllers/reportingController.ts",
+    "src/routes/reportRoutes.ts",
+    "src/routes/settingsRoutes.ts",
+    "src/services/cacheService.ts",
+    "src/services/databaseOptimizationService.ts",
+    "src/middleware/cache.ts"
+  ]
+}
