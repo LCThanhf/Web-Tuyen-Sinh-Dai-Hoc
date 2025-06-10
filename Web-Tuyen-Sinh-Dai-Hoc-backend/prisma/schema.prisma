@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -56,6 +56,13 @@ model Student {
 model PersonalInfo {
   id                String          @id @default(uuid())
   studentId         String          @unique
+  ethnicity         String?
+  religion          String?
+  permanentAddress  String?
+  currentAddress    String?
+  guardianName      String?
+  guardianPhone     String?
+  guardianRelation  String?
   cccdFrontFile     String?
   cccdBackFile      String?
   status            ApprovalStatus  @default(PENDING)

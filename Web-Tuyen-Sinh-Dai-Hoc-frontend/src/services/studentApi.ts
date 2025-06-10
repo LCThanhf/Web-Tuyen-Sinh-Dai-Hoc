@@ -18,8 +18,13 @@ export interface PersonalInfo {
   guardianName: string;
   guardianPhone: string;
   guardianRelation: string;
+  cccdFrontFile?: string;
+  cccdBackFile?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;
+  adminNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
 export interface Score {

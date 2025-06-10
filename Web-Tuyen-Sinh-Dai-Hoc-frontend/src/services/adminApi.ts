@@ -269,6 +269,22 @@ export interface PersonalInfoDocument {
   reviewedBy?: string;
   createdAt: string;
   updatedAt: string;
+  // Personal information fields
+  fullName: string;
+  dateOfBirth: string;
+  gender: 'MALE' | 'FEMALE';
+  ethnicity: string;
+  religion?: string;
+  cccd: string;
+  cccdIssueDate: string;
+  cccdIssuePlace: string;
+  permanentAddress: string;
+  currentAddress: string;
+  guardianName: string;
+  guardianPhone: string;
+  guardianRelation: string;
+  cccdFrontFile?: string;
+  cccdBackFile?: string;
   student: {
     id: string;
     user: {

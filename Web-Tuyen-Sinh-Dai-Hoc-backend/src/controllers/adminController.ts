@@ -1585,7 +1585,17 @@ export class AdminController {
         },
         include: {
           student: {
-            include: {
+            select: {
+              id: true,
+              dob: true,
+              gender: true,
+              cccdIssuePlace: true,
+              cccdIssueDate: true,
+              address: true,
+              city: true,
+              district: true,
+              highSchoolName: true,
+              graduationYear: true,
               user: {
                 select: {
                   id: true,
@@ -1619,6 +1629,7 @@ export class AdminController {
         }
       });
     } catch (error) {
+      console.error('Error fetching personal info documents:', error);
       res.status(500).json({
         success: false,
         message: 'Error fetching personal info documents',

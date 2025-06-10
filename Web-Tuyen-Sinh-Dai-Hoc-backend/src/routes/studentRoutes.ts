@@ -18,6 +18,8 @@ router.use(requireStudent);
 // Personal Information routes
 router.get('/personal-info', StudentController.getPersonalInfo);
 router.put('/personal-info', validatePersonalInfo, StudentController.updatePersonalInfo);
+router.post('/personal-info/upload-cccd-front', uploadSingle('cccdFrontFile'), StudentController.uploadCccdFrontFile);
+router.post('/personal-info/upload-cccd-back', uploadSingle('cccdBackFile'), StudentController.uploadCccdBackFile);
 
 // Scores routes
 router.get('/scores', StudentController.getScores);
@@ -43,6 +45,9 @@ router.post('/applications', ApplicationController.submitApplication);
 router.get('/applications/:id/status', ApplicationController.getApplicationStatus);
 router.put('/applications/:id/priority', ApplicationController.updateApplicationPriority);
 router.delete('/applications/:id', ApplicationController.deleteApplication);
+
+// File serving route
+router.get('/files/*', StudentController.serveFile);
 
 // Delete routes for documents
 router.delete('/scores/:id', StudentController.deleteScore);

@@ -71,7 +71,15 @@ export class StudentController {
         city, 
         district, 
         highSchoolName, 
-        graduationYear 
+        graduationYear,
+        // Personal information fields
+        ethnicity,
+        religion,
+        permanentAddress,
+        currentAddress,
+        guardianName,
+        guardianPhone,
+        guardianRelation
       } = req.body;
 
       // First, find or create student record
@@ -107,10 +115,24 @@ export class StudentController {
       const personalInfo = await prisma.personalInfo.upsert({
         where: { studentId: student.id },
         update: {
+          ethnicity,
+          religion,
+          permanentAddress,
+          currentAddress,
+          guardianName,
+          guardianPhone,
+          guardianRelation,
           status: 'PENDING' // Reset status when updated
         },
         create: {
           studentId: student.id,
+          ethnicity,
+          religion,
+          permanentAddress,
+          currentAddress,
+          guardianName,
+          guardianPhone,
+          guardianRelation,
           status: 'PENDING'
         }
       });
@@ -597,6 +619,127 @@ export class StudentController {
     }
   }
 
+  // Personal Info File Upload Methods
+  static async uploadCccdFrontFile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+        return;
+      }
+
+      // Get student record
+      const student = await prisma.student.findUnique({
+        where: { userId }
+      });
+
+      if (!student) {
+        res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+        return;
+      }
+
+      // Generate file URL
+      const fileUrl = `/uploads/${file.fieldname}/${file.filename}`;
+
+      // Update personal info with front CCCD file path
+      const personalInfo = await prisma.personalInfo.upsert({
+        where: { studentId: student.id },
+        update: {
+          cccdFrontFile: fileUrl,
+          status: 'PENDING' // Reset status when file is uploaded
+        },
+        create: {
+          studentId: student.id,
+          cccdFrontFile: fileUrl,
+          status: 'PENDING'
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'CCCD front file uploaded successfully',
+        data: {
+          fileUrl,
+          personalInfo
+        }
+      });
+    } catch (error) {
+      console.error('Upload CCCD front file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload CCCD front file'
+      });
+    }
+  }
+
+  static async uploadCccdBackFile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+        return;
+      }
+
+      // Get student record
+      const student = await prisma.student.findUnique({
+        where: { userId }
+      });
+
+      if (!student) {
+        res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+        return;
+      }
+
+      // Generate file URL
+      const fileUrl = `/uploads/${file.fieldname}/${file.filename}`;
+
+      // Update personal info with back CCCD file path
+      const personalInfo = await prisma.personalInfo.upsert({
+        where: { studentId: student.id },
+        update: {
+          cccdBackFile: fileUrl,
+          status: 'PENDING' // Reset status when file is uploaded
+        },
+        create: {
+          studentId: student.id,
+          cccdBackFile: fileUrl,
+          status: 'PENDING'
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'CCCD back file uploaded successfully',
+        data: {
+          fileUrl,
+          personalInfo
+        }
+      });
+    } catch (error) {
+      console.error('Upload CCCD back file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload CCCD back file'
+      });
+    }
+  }
+
   // Delete Methods
   static async deleteScore(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -789,6 +932,35 @@ export class StudentController {
       res.status(500).json({
         success: false,
         message: 'Failed to delete certificate information'
+      });
+    }
+  }
+
+  // File serving method
+  static async serveFile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const filePath = req.params[0]; // Get the file path after /files/
+      const fullPath = path.join(process.cwd(), 'uploads', filePath);
+
+      // Check if file exists
+      if (!fs.existsSync(fullPath)) {
+        res.status(404).json({
+          success: false,
+          message: 'File not found'
+        });
+        return;
+      }
+
+      // Send file with proper headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.sendFile(fullPath);
+    } catch (error) {
+      console.error('Serve file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to serve file'
       });
     }
   }

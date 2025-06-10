@@ -2,7 +2,7 @@
 import axios, { type AxiosResponse } from 'axios';
 
 // API Configuration - use environment variable if available, fallback to localhost for development
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Create axios instance with default config
 export const apiClient = axios.create({

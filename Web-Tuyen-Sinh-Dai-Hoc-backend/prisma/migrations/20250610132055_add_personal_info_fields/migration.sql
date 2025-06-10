@@ -40,6 +40,13 @@ CREATE TABLE `students` (
 CREATE TABLE `personal_infos` (
     `id` VARCHAR(191) NOT NULL,
     `studentId` VARCHAR(191) NOT NULL,
+    `ethnicity` VARCHAR(191) NULL,
+    `religion` VARCHAR(191) NULL,
+    `permanentAddress` VARCHAR(191) NULL,
+    `currentAddress` VARCHAR(191) NULL,
+    `guardianName` VARCHAR(191) NULL,
+    `guardianPhone` VARCHAR(191) NULL,
+    `guardianRelation` VARCHAR(191) NULL,
     `cccdFrontFile` VARCHAR(191) NULL,
     `cccdBackFile` VARCHAR(191) NULL,
     `status` ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
@@ -63,7 +70,6 @@ CREATE TABLE `schools` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `schools_name_key`(`name`),
     UNIQUE INDEX `schools_code_key`(`code`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

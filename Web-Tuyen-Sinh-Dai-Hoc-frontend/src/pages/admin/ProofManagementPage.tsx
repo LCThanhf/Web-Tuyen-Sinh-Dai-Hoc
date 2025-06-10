@@ -279,6 +279,46 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
     ];
 
     // Add specific columns based on document type
+    if (currentTab === 'personal') {
+      baseColumns.splice(4, 0, {
+        title: 'CCCD mặt trước',
+        dataIndex: 'cccdFrontFile',
+        key: 'cccdFrontFile',
+        render: (fileUrl: string, record: any) =>
+          fileUrl ? (
+            <Button 
+              type="link" 
+              icon={<EyeOutlined />} 
+              onClick={() => handleViewFile(fileUrl, `cccd_front_${record.student?.user?.fullName || 'cccd_front'}`)}
+              size="small"
+            >
+              Xem file
+            </Button>
+          ) : (
+            <Text type="secondary">Không có file</Text>
+          ),
+      });
+      
+      baseColumns.splice(5, 0, {
+        title: 'CCCD mặt sau',
+        dataIndex: 'cccdBackFile',
+        key: 'cccdBackFile',
+        render: (fileUrl: string, record: any) =>
+          fileUrl ? (
+            <Button 
+              type="link" 
+              icon={<EyeOutlined />} 
+              onClick={() => handleViewFile(fileUrl, `cccd_back_${record.student?.user?.fullName || 'cccd_back'}`)}
+              size="small"
+            >
+              Xem file
+            </Button>
+          ) : (
+            <Text type="secondary">Không có file</Text>
+          ),
+      });
+    }
+
     if (currentTab === 'scores') {
       baseColumns.splice(4, 0, {
         title: 'Loại điểm',
@@ -509,6 +549,111 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
                 {selectedDocument.adminNote}
               </Text>
             </Col>
+          )}
+          
+          {/* Personal information specific fields */}
+          {currentTab === 'personal' && (
+            <>
+              {/* Personal Details Section */}
+              <Col span={24}>
+                <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>Chi tiết thông tin cá nhân</Title>
+              </Col>
+              
+              {/* Basic Information */}
+              <Col span={12}>
+                <Text strong>Ngày sinh: </Text>
+                <Text>{selectedDocument.student?.dob ? new Date(selectedDocument.student.dob).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Giới tính: </Text>
+                <Text>{selectedDocument.student?.gender === 'MALE' ? 'Nam' : selectedDocument.student?.gender === 'FEMALE' ? 'Nữ' : 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Dân tộc: </Text>
+                <Text>{selectedDocument.ethnicity || 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Tôn giáo: </Text>
+                <Text>{selectedDocument.religion || 'Không'}</Text>
+              </Col>
+              
+              {/* CCCD Information */}
+              <Col span={24}>
+                <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>Thông tin CCCD</Title>
+              </Col>
+              <Col span={12}>
+                <Text strong>Nơi cấp CCCD: </Text>
+                <Text>{selectedDocument.student?.cccdIssuePlace || 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Ngày cấp CCCD: </Text>
+                <Text>{selectedDocument.student?.cccdIssueDate ? new Date(selectedDocument.student.cccdIssueDate).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}</Text>
+              </Col>
+              
+              {/* Address Information */}
+              <Col span={24}>
+                <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>Thông tin địa chỉ</Title>
+              </Col>
+              <Col span={24}>
+                <Text strong>Địa chỉ thường trú: </Text>
+                <Text>{selectedDocument.permanentAddress || 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={24}>
+                <Text strong>Địa chỉ hiện tại: </Text>
+                <Text>{selectedDocument.currentAddress || 'Chưa cập nhật'}</Text>
+              </Col>
+              
+              {/* Guardian Information */}
+              <Col span={24}>
+                <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>Thông tin người giám hộ</Title>
+              </Col>
+              <Col span={12}>
+                <Text strong>Họ tên người giám hộ: </Text>
+                <Text>{selectedDocument.guardianName || 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Số điện thoại người giám hộ: </Text>
+                <Text>{selectedDocument.guardianPhone || 'Chưa cập nhật'}</Text>
+              </Col>
+              <Col span={12}>
+                <Text strong>Mối quan hệ: </Text>
+                <Text>{selectedDocument.guardianRelation || 'Chưa cập nhật'}</Text>
+              </Col>
+              
+              {/* CCCD Files */}
+              <Col span={24}>
+                <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>File minh chứng CCCD</Title>
+              </Col>
+              {selectedDocument.cccdFrontFile && (
+                <Col span={12}>
+                  <Text strong>CCCD mặt trước: </Text>
+                  <Button 
+                    type="link" 
+                    icon={<EyeOutlined />} 
+                    onClick={() => handleViewFile(selectedDocument.cccdFrontFile, `cccd_front_${selectedDocument.student?.user?.fullName || 'cccd_front'}`)}
+                  >
+                    Xem file CCCD mặt trước
+                  </Button>
+                </Col>
+              )}
+              {selectedDocument.cccdBackFile && (
+                <Col span={12}>
+                  <Text strong>CCCD mặt sau: </Text>
+                  <Button 
+                    type="link" 
+                    icon={<EyeOutlined />} 
+                    onClick={() => handleViewFile(selectedDocument.cccdBackFile, `cccd_back_${selectedDocument.student?.user?.fullName || 'cccd_back'}`)}
+                  >
+                    Xem file CCCD mặt sau
+                  </Button>
+                </Col>
+              )}
+              {!selectedDocument.cccdFrontFile && !selectedDocument.cccdBackFile && (
+                <Col span={24}>
+                  <Text type="secondary">Chưa có file CCCD được tải lên</Text>
+                </Col>
+              )}
+            </>
           )}
           
           {/* Specific fields based on document type */}
