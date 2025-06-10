@@ -1573,12 +1573,88 @@ export class AdminController {
     }
   }
 
-  // Document-specific methods for admin routes compatibility
   static async getPersonalInfoDocuments(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { page = 1, limit = 10, status = 'PENDING' } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+  try {
+    const { page = 1, limit = 10, status = 'PENDING' } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
 
+    console.log('Getting personal info documents with status:', status);
+
+    if (status === 'PENDING') {
+      // For pending status, get students who have personal data but may not have PersonalInfo records
+      const studentsWithPersonalData = await prisma.student.findMany({
+        where: {
+          AND: [
+            { dob: { not: null } },
+            { gender: { not: null } },
+            { address: { not: null } },
+            {
+              OR: [
+                { personalInfo: null }, // No PersonalInfo record
+                { personalInfo: { status: 'PENDING' } } // Or PersonalInfo with PENDING status
+              ]
+            }
+          ]
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              cccd: true,
+            }
+          },
+          personalInfo: true
+        },
+        skip,
+        take: Number(limit),
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      // Transform students to document format, using PersonalInfo ID if it exists, otherwise Student ID
+      const documents = studentsWithPersonalData.map(student => ({
+        id: student.personalInfo?.id || student.id, // Use PersonalInfo ID if exists, otherwise Student ID
+        studentId: student.id,
+        status: student.personalInfo?.status || 'PENDING',
+        adminNote: student.personalInfo?.adminNote || null,
+        reviewedAt: student.personalInfo?.reviewedAt || null,
+        reviewedBy: student.personalInfo?.reviewedBy || null,
+        createdAt: student.personalInfo?.createdAt || student.createdAt,
+        updatedAt: student.personalInfo?.updatedAt || student.updatedAt,
+        student: student
+      }));
+
+      const totalCount = await prisma.student.count({
+        where: {
+          AND: [
+            { dob: { not: null } },
+            { gender: { not: null } },
+            { address: { not: null } },
+            {
+              OR: [
+                { personalInfo: null },
+                { personalInfo: { status: 'PENDING' } }
+              ]
+            }
+          ]
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          documents,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total: totalCount,
+            totalPages: Math.ceil(totalCount / Number(limit))
+          }
+        }
+      });
+    } else {
+      // For approved/rejected, get actual PersonalInfo records
       const documents = await prisma.personalInfo.findMany({
         where: {
           status: status as any,
@@ -1618,23 +1694,125 @@ export class AdminController {
           }
         }
       });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error fetching personal info documents',
-        error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  } catch (error) {
+    console.error('Error fetching personal info documents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching personal info documents',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
+  static async approvePersonalInfo(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    console.log('=== APPROVE PERSONAL INFO DEBUG ===');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    
+    const { id } = req.params;
+    const { adminNote } = req.body;
+    const adminId = req.user!.userId;
+
+    // First, try to find the PersonalInfo record by ID
+    let personalInfo = await prisma.personalInfo.findUnique({
+      where: { id },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                fullName: true,
+                cccd: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // If not found by PersonalInfo ID, try to find by Student ID
+    if (!personalInfo) {
+      console.log('PersonalInfo not found by ID, trying to find by studentId...');
+      
+      personalInfo = await prisma.personalInfo.findUnique({
+        where: { studentId: id },
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  fullName: true,
+                  cccd: true
+                }
+              }
+            }
+          }
+        }
       });
     }
-  }
 
-  static async approvePersonalInfo(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { adminNote } = req.body;
-      const adminId = req.user!.userId;
-
-      const document = await prisma.personalInfo.update({
+    // If still not found, try to find the student and create PersonalInfo
+    if (!personalInfo) {
+      console.log('PersonalInfo not found, checking if student exists...');
+      
+      const student = await prisma.student.findUnique({
         where: { id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              cccd: true
+            }
+          }
+        }
+      });
+
+      if (student) {
+        // Create PersonalInfo record if student exists but no PersonalInfo
+        personalInfo = await prisma.personalInfo.create({
+          data: {
+            studentId: student.id,
+            status: 'APPROVED',
+            adminNote: adminNote || null,
+            reviewedAt: new Date(),
+            reviewedBy: adminId
+          },
+          include: {
+            student: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    email: true,
+                    fullName: true,
+                    cccd: true
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        console.log('Created new PersonalInfo and approved:', personalInfo.id);
+      } else {
+        console.log('Neither PersonalInfo nor Student found with ID:', id);
+        res.status(404).json({
+          success: false,
+          message: 'Personal info document not found'
+        });
+        return;
+      }
+    } else {
+      // Update existing PersonalInfo record
+      personalInfo = await prisma.personalInfo.update({
+        where: { id: personalInfo.id },
         data: {
           status: 'APPROVED',
           adminNote: adminNote || null,
@@ -1646,8 +1824,10 @@ export class AdminController {
             include: {
               user: {
                 select: {
+                  id: true,
                   email: true,
-                  fullName: true
+                  fullName: true,
+                  cccd: true
                 }
               }
             }
@@ -1655,28 +1835,93 @@ export class AdminController {
         }
       });
 
-      res.json({
-        success: true,
-        message: 'Personal info approved successfully',
-        data: document
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error approving personal info',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.log('Updated existing PersonalInfo:', personalInfo.id);
     }
+
+    res.json({
+      success: true,
+      message: 'Personal info approved successfully',
+      data: personalInfo
+    });
+  } catch (error: any) {
+    console.error('=== ERROR IN APPROVE PERSONAL INFO ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error approving personal info',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
+}
 
   static async rejectPersonalInfo(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { adminNote } = req.body;
-      const adminId = req.user!.userId;
+  try {
+    const { id } = req.params;
+    const { adminNote } = req.body;
+    const adminId = req.user!.userId;
 
-      const document = await prisma.personalInfo.update({
-        where: { id },
+    if (!adminNote || adminNote.trim() === '') {
+      res.status(400).json({
+        success: false,
+        message: 'Admin note is required for rejection'
+      });
+      return;
+    }
+
+    // First, try to find the PersonalInfo record by ID
+    let personalInfo = await prisma.personalInfo.findUnique({
+      where: { id }
+    });
+
+    // If not found by PersonalInfo ID, try to find by Student ID
+    if (!personalInfo) {
+      personalInfo = await prisma.personalInfo.findUnique({
+        where: { studentId: id }
+      });
+    }
+
+    // If still not found, try to find the student and create PersonalInfo
+    if (!personalInfo) {
+      const student = await prisma.student.findUnique({
+        where: { id }
+      });
+
+      if (student) {
+        // Create PersonalInfo record if student exists but no PersonalInfo
+        personalInfo = await prisma.personalInfo.create({
+          data: {
+            studentId: student.id,
+            status: 'REJECTED',
+            adminNote,
+            reviewedAt: new Date(),
+            reviewedBy: adminId
+          },
+          include: {
+            student: {
+              include: {
+                user: {
+                  select: {
+                    email: true,
+                    fullName: true
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: 'Personal info document not found'
+        });
+        return;
+      }
+    } else {
+      // Update existing PersonalInfo record
+      personalInfo = await prisma.personalInfo.update({
+        where: { id: personalInfo.id },
         data: {
           status: 'REJECTED',
           adminNote,
@@ -1696,20 +1941,22 @@ export class AdminController {
           }
         }
       });
-
-      res.json({
-        success: true,
-        message: 'Personal info rejected',
-        data: document
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error rejecting personal info',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
     }
+
+    res.json({
+      success: true,
+      message: 'Personal info rejected',
+      data: personalInfo
+    });
+  } catch (error) {
+    console.error('Error rejecting personal info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting personal info',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
+}
 
   static async getScoreDocuments(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
