@@ -24,6 +24,9 @@ router.post('/personal-info/upload-cccd-back', uploadSingle('cccdBackFile'), Stu
 // Scores routes
 router.get('/scores', StudentController.getScores);
 router.post('/scores', validateScore, StudentController.upsertScore);
+router.post('/scores/upload-exam-file', uploadSingle('examFile'), StudentController.uploadExamFile);
+router.post('/scores/upload-transcript-file', uploadSingle('transcriptFile'), StudentController.uploadTranscriptFile);
+router.post('/scores/upload-assessment-file', uploadSingle('assessmentFile'), StudentController.uploadAssessmentFile);
 
 // Priority routes
 router.get('/priority', StudentController.getPriority);

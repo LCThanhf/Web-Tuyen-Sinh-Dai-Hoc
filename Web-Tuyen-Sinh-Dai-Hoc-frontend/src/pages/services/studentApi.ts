@@ -114,6 +114,17 @@ export const studentApi = {
     return response.data;
   },
 
+  uploadPriorityFile: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return apiClient.post('/student/priority/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
   // Achievement
   getAchievement: async (): Promise<Achievement | null> => {
     const response = await apiClient.get<ApiResponse<Achievement>>('/student/achievement');
@@ -145,4 +156,43 @@ export const studentApi = {
     const response = await apiClient.delete<ApiResponse<{ message: string }>>('/student/certificate');
     return response.data;
   },
+};
+
+// Handle delete button click
+const handleDelete = () => {
+  if (!priorityRecord?.id) return;
+
+  confirm({
+    title: 'Bạn có chắc chắn muốn xóa thông tin ưu tiên này?',
+    icon: <ExclamationCircleOutlined />,
+    content: 'Thao tác này không thể hoàn tác.',
+    okText: 'Xóa',
+    okType: 'danger',
+    cancelText: 'Hủy',
+    onOk: async () => {
+      try {
+        setSubmitting(true);
+
+        // Call delete API
+        await studentApi.deletePriority();
+        message.success("Xóa thông tin ưu tiên thành công!");
+
+        // Reset local state
+        setPriorityRecord(null);
+        form.resetFields();
+        setIsEditing(false);
+        setShowDoiTuongUuTienFile(true);
+        setSelectedKVFile(null);
+        setSelectedDTFile(null);
+
+        // Reload data to ensure consistency
+        await loadPriorityData();
+      } catch (error) {
+        console.error("Error deleting priority data:", error);
+        message.error("Không thể xóa thông tin ưu tiên");
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
 };

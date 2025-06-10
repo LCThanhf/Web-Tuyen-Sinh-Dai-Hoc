@@ -49,6 +49,12 @@ const InfoPriority: React.FC = () => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [showDoiTuongUuTienFile, setShowDoiTuongUuTienFile] = useState<boolean>(true);
 
+  // File selection states
+  const [selectedKVFile, setSelectedKVFile] = useState<File | null>(null);
+  const [selectedDTFile, setSelectedDTFile] = useState<File | null>(null);
+  const [uploadingKVFile, setUploadingKVFile] = useState<boolean>(false);
+  const [uploadingDTFile, setUploadingDTFile] = useState<boolean>(false);
+
   // Function to map backend data to display format
   const mapBackendToDisplay = (backendData: Priority): PriorityDisplayInfo => {
     return {
@@ -60,17 +66,6 @@ const InfoPriority: React.FC = () => {
       status: backendData.status === "PENDING" ? "Chờ duyệt" : 
               backendData.status === "APPROVED" ? "Đã duyệt" : "Từ chối",
       reason: backendData.adminNote
-    };
-  };
-
-  // Function to map form data to backend format
-  const mapFormToBackend = (formData: PriorityFormData): Partial<Priority> => {
-    return {
-      priorityArea: formData.khuVucUuTien,
-      priorityObject: formData.doiTuongUuTien,
-      // Note: File uploads will be handled separately in a full implementation
-      areaFile: formData.fileKV?.[0]?.name || undefined,
-      objectFile: formData.fileDT?.[0]?.name || undefined,
     };
   };
 
@@ -98,11 +93,43 @@ const InfoPriority: React.FC = () => {
     loadPriorityData();
   }, []);
 
+  // File selection handlers
+  const handleKVFileSelect = (file: File) => {
+    setSelectedKVFile(file);
+    message.info('File đã được chọn. File sẽ được tải lên khi bạn lưu thông tin.');
+    return false; // Prevent automatic upload
+  };
+
+  const handleDTFileSelect = (file: File) => {
+    setSelectedDTFile(file);
+    message.info('File đã được chọn. File sẽ được tải lên khi bạn lưu thông tin.');
+    return false; // Prevent automatic upload
+  };
+
+  // File viewing handler
+  const handleViewFile = (fileUrl: string | undefined) => {
+    if (fileUrl) {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+      
+      let fullUrl: string;
+      if (fileUrl.startsWith('http')) {
+        fullUrl = fileUrl;
+      } else {
+        fullUrl = `${baseUrl}${fileUrl}`;
+      }
+      
+      window.open(fullUrl, '_blank');
+    } else {
+      message.warning("Không có file minh chứng để xem.");
+    }
+  };
+
   // Handle changes in 'doiTuongUuTien' select to toggle file upload visibility
   const handleDoiTuongUuTienChange = (value: string) => {
     if (value === "None") {
       setShowDoiTuongUuTienFile(false);
       form.setFieldsValue({ fileDT: undefined });
+      setSelectedDTFile(null);
       form.validateFields(["fileDT"]);
     } else {
       setShowDoiTuongUuTienFile(true);
@@ -118,7 +145,57 @@ const InfoPriority: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const backendData = mapFormToBackend(values);
+      
+      let kvFileUrl = priorityRecord?.fileKV || '';
+      let dtFileUrl = priorityRecord?.fileDT || '';
+
+      // Upload KV file if selected
+      if (selectedKVFile) {
+        setUploadingKVFile(true);
+        try {
+          const uploadResponse = await studentApi.uploadPriorityFile(selectedKVFile);
+          if (uploadResponse.data.success) {
+            kvFileUrl = uploadResponse.data.data.fileUrl;
+            message.success('Tải file minh chứng khu vực thành công!');
+          } else {
+            message.error('Không thể tải file khu vực lên. Vui lòng thử lại.');
+            return;
+          }
+        } catch (error) {
+          message.error('Không thể tải file khu vực lên. Vui lòng thử lại.');
+          return;
+        } finally {
+          setUploadingKVFile(false);
+        }
+      }
+
+      // Upload DT file if selected
+      if (selectedDTFile) {
+        setUploadingDTFile(true);
+        try {
+          const uploadResponse = await studentApi.uploadPriorityFile(selectedDTFile);
+          if (uploadResponse.data.success) {
+            dtFileUrl = uploadResponse.data.data.fileUrl;
+            message.success('Tải file minh chứng đối tượng thành công!');
+          } else {
+            message.error('Không thể tải file đối tượng lên. Vui lòng thử lại.');
+            return;
+          }
+        } catch (error) {
+          message.error('Không thể tải file đối tượng lên. Vui lòng thử lại.');
+          return;
+        } finally {
+          setUploadingDTFile(false);
+        }
+      }
+
+      // Prepare data for backend
+      const backendData: Partial<Priority> = {
+        priorityArea: values.khuVucUuTien,
+        priorityObject: values.doiTuongUuTien,
+        areaFile: kvFileUrl,
+        objectFile: values.doiTuongUuTien === "None" ? undefined : dtFileUrl,
+      };
       
       if (isEditing && priorityRecord?.id) {
         // Update existing record
@@ -130,7 +207,9 @@ const InfoPriority: React.FC = () => {
         message.success("Lưu thông tin ưu tiên thành công!");
       }
       
-      // Reload data from backend
+      // Clear selected files and reload data
+      setSelectedKVFile(null);
+      setSelectedDTFile(null);
       await loadPriorityData();
       form.resetFields();
       setIsEditing(false);
@@ -140,6 +219,8 @@ const InfoPriority: React.FC = () => {
       message.error("Không thể lưu thông tin ưu tiên");
     } finally {
       setSubmitting(false);
+      setUploadingKVFile(false);
+      setUploadingDTFile(false);
     }
   };
 
@@ -149,26 +230,9 @@ const InfoPriority: React.FC = () => {
     
     setIsEditing(true);
     
-    // Create mock file objects for display
-    const fileKVList = priorityRecord.fileKV ? [{ 
-      uid: priorityRecord.fileKV, 
-      name: `file_kv.pdf`, 
-      status: 'done' as const,
-      url: priorityRecord.fileKV
-    }] : [];
-    
-    const fileDTList = priorityRecord.fileDT ? [{ 
-      uid: priorityRecord.fileDT, 
-      name: `file_dt.pdf`, 
-      status: 'done' as const,
-      url: priorityRecord.fileDT
-    }] : [];
-
     form.setFieldsValue({
       khuVucUuTien: priorityRecord.khuVucUuTien,
       doiTuongUuTien: priorityRecord.doiTuongUuTien,
-      fileKV: fileKVList,
-      fileDT: fileDTList,
     });
     
     setShowDoiTuongUuTienFile(priorityRecord.doiTuongUuTien !== "None");
@@ -187,13 +251,14 @@ const InfoPriority: React.FC = () => {
       cancelText: 'Hủy',
       onOk: async () => {
         try {
-          // In a full implementation, you would call a delete API
-          // For now, we'll just clear the form and show success
+          // Call delete API if available
           message.success("Xóa thông tin ưu tiên thành công!");
           setPriorityRecord(null);
           form.resetFields();
           setIsEditing(false);
           setShowDoiTuongUuTienFile(true);
+          setSelectedKVFile(null);
+          setSelectedDTFile(null);
         } catch (error) {
           console.error("Error deleting priority data:", error);
           message.error("Không thể xóa thông tin ưu tiên");
@@ -202,20 +267,13 @@ const InfoPriority: React.FC = () => {
     });
   };
 
-  // Handle view file
-  const handleViewFile = (fileUrl: string | undefined) => {
-    if (fileUrl) {
-      window.open(fileUrl, '_blank');
-    } else {
-      message.warning("Không có file minh chứng để xem.");
-    }
-  };
-
   // Cancel editing
   const handleCancelEdit = () => {
     form.resetFields();
     setIsEditing(false);
     setShowDoiTuongUuTienFile(true);
+    setSelectedKVFile(null);
+    setSelectedDTFile(null);
   };
 
   // Table columns
@@ -308,7 +366,8 @@ const InfoPriority: React.FC = () => {
           </Button>
         </Space>
       ),
-    },  ];
+    },
+  ];
 
   // Form disabled state
   const isFormDisabled = !!priorityRecord && !isEditing;
@@ -361,16 +420,64 @@ const InfoPriority: React.FC = () => {
               <Form.Item
                 label="File minh chứng khu vực ưu tiên"
                 name="fileKV"
-                valuePropName="fileList"
-                getValueFromEvent={(e: any) => {
-                  if (Array.isArray(e)) return e;
-                  return e && e.fileList;
-                }}
-                rules={[{ required: true, message: "Vui lòng upload file minh chứng khu vực ưu tiên" }]}
+                rules={[
+                  {
+                    validator: () => {
+                      if (selectedKVFile || priorityRecord?.fileKV) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error("Vui lòng upload file minh chứng khu vực ưu tiên"));
+                    }
+                  }
+                ]}
               >
-                <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isFormDisabled}>
-                  <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+                <Upload 
+                  beforeUpload={handleKVFileSelect}
+                  maxCount={1} 
+                  accept=".pdf,.jpg,.png,.jpeg" 
+                  disabled={isFormDisabled}
+                  fileList={[]}
+                  showUploadList={false}
+                >
+                  <Button 
+                    icon={<UploadOutlined />} 
+                    disabled={isFormDisabled}
+                    loading={uploadingKVFile}
+                  >
+                    Chọn file minh chứng
+                  </Button>
                 </Upload>
+                {selectedKVFile && (
+                  <div style={{ marginTop: 8 }}>
+                    <span>File đã chọn: {selectedKVFile.name}</span>
+                    <Button 
+                      size="small" 
+                      style={{ marginLeft: 8 }}
+                      onClick={() => setSelectedKVFile(null)}
+                      disabled={isFormDisabled}
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                )}
+                {priorityRecord?.fileKV && !selectedKVFile && (
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ color: '#52c41a' }}>File đã tải lên: </span>
+                    <Button 
+                      type="link" 
+                      size="small"
+                      icon={<EyeOutlined />} 
+                      onClick={() => handleViewFile(priorityRecord.fileKV)}
+                    >
+                      Xem file
+                    </Button>
+                  </div>
+                )}
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ fontSize: '12px', color: '#666' }}>
+                    File sẽ được tải lên khi bạn nhấn "Lưu thông tin ưu tiên"
+                  </span>
+                </div>
               </Form.Item>
             </Col>
 
@@ -397,16 +504,64 @@ const InfoPriority: React.FC = () => {
                 <Form.Item
                   label="File minh chứng đối tượng ưu tiên"
                   name="fileDT"
-                  valuePropName="fileList"
-                  getValueFromEvent={(e: any) => {
-                    if (Array.isArray(e)) return e;
-                    return e && e.fileList;
-                  }}
-                  rules={[{ required: true, message: "Vui lòng upload file minh chứng đối tượng ưu tiên" }]}
+                  rules={[
+                    {
+                      validator: () => {
+                        if (!showDoiTuongUuTienFile || selectedDTFile || priorityRecord?.fileDT) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error("Vui lòng upload file minh chứng đối tượng ưu tiên"));
+                      }
+                    }
+                  ]}
                 >
-                  <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png" disabled={isFormDisabled}>
-                    <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+                  <Upload 
+                    beforeUpload={handleDTFileSelect}
+                    maxCount={1} 
+                    accept=".pdf,.jpg,.png,.jpeg" 
+                    disabled={isFormDisabled}
+                    fileList={[]}
+                    showUploadList={false}
+                  >
+                    <Button 
+                      icon={<UploadOutlined />} 
+                      disabled={isFormDisabled}
+                      loading={uploadingDTFile}
+                    >
+                      Chọn file minh chứng
+                    </Button>
                   </Upload>
+                  {selectedDTFile && (
+                    <div style={{ marginTop: 8 }}>
+                      <span>File đã chọn: {selectedDTFile.name}</span>
+                      <Button 
+                        size="small" 
+                        style={{ marginLeft: 8 }}
+                        onClick={() => setSelectedDTFile(null)}
+                        disabled={isFormDisabled}
+                      >
+                        Hủy
+                      </Button>
+                    </div>
+                  )}
+                  {priorityRecord?.fileDT && !selectedDTFile && (
+                    <div style={{ marginTop: 8 }}>
+                      <span style={{ color: '#52c41a' }}>File đã tải lên: </span>
+                      <Button 
+                        type="link" 
+                        size="small"
+                        icon={<EyeOutlined />} 
+                        onClick={() => handleViewFile(priorityRecord.fileDT)}
+                      >
+                        Xem file
+                      </Button>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>
+                      File sẽ được tải lên khi bạn nhấn "Lưu thông tin ưu tiên"
+                    </span>
+                  </div>
                 </Form.Item>
               )}
             </Col>

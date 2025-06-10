@@ -372,6 +372,43 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
           return 'N/A';
         },
       });
+
+      baseColumns.splice(6, 0, {
+        title: 'File minh chứng',
+        key: 'scoreFile',
+        render: (_: any, record: any) => {
+          // Handle files from the files JSON array
+          let fileUrl = '';
+          let fileName = '';
+          
+          if (record.files && Array.isArray(record.files) && record.files.length > 0) {
+            fileUrl = record.files[0]; // Get the first file
+            // Determine file name based on score type
+            if (record.type === 'THPT') {
+              fileName = `điểm_thi_THPT_${record.student?.user?.fullName || 'exam'}`;
+            } else if (record.type === 'TRANSCRIPT') {
+              fileName = `học_bạ_${record.student?.user?.fullName || 'transcript'}`;
+            } else if (record.type === 'ASSESSMENT') {
+              fileName = `đánh_giá_năng_lực_${record.student?.user?.fullName || 'assessment'}`;
+            } else {
+              fileName = `minh_chứng_${record.student?.user?.fullName || 'file'}`;
+            }
+          }
+
+          return fileUrl ? (
+            <Button 
+              type="link" 
+              icon={<EyeOutlined />} 
+              onClick={() => handleViewFile(fileUrl, fileName)}
+              size="small"
+            >
+              Xem file
+            </Button>
+          ) : (
+            <Text type="secondary">Không có file</Text>
+          );
+        },
+      });
     }
 
     if (currentTab === 'priority') {
@@ -704,43 +741,88 @@ const ProofManagementPage: React.FC<ProofManagementPageProps> = () => {
                       <Text>Có</Text>
                     </Col>
                   )}
+                  {selectedDocument.files && Array.isArray(selectedDocument.files) && selectedDocument.files.length > 0 && (
+                    <Col span={24}>
+                      <Text strong>File minh chứng đánh giá năng lực: </Text>
+                      <Button 
+                        type="link" 
+                        icon={<EyeOutlined />} 
+                        onClick={() => handleViewFile(selectedDocument.files[0], `đánh_giá_năng_lực_${selectedDocument.student?.user?.fullName || 'assessment'}`)}
+                      >
+                        Xem file đánh giá năng lực
+                      </Button>
+                    </Col>
+                  )}
                 </>
-              ) : (
-                selectedDocument.scores && Object.keys(selectedDocument.scores).length > 0 && (
-                  <Col span={24}>
-                    <Text strong>Điểm số: </Text>
-                    <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
-                      {JSON.stringify(selectedDocument.scores, null, 2)}
-                    </pre>
-                  </Col>
-                )
-              )}
-              
-              {selectedDocument.examNumber && (
-                <Col span={12}>
-                  <Text strong>Số báo danh: </Text>
-                  <Text>{selectedDocument.examNumber}</Text>
-                </Col>
-              )}
-              {selectedDocument.examBan && (
-                <Col span={12}>
-                  <Text strong>Ban thi: </Text>
-                  <Text>{(() => {
-                    const banMap: { [key: string]: string } = {
-                      'natural': 'Khoa học tự nhiên',
-                      'social': 'Khoa học xã hội',
-                      'general': 'Khối chung'
-                    };
-                    return banMap[selectedDocument.examBan] || selectedDocument.examBan;
-                  })()}</Text>
-                </Col>
-              )}
-              {selectedDocument.averageOverall && (
-                <Col span={12}>
-                  <Text strong>Điểm trung bình tổng: </Text>
-                  <Text>{selectedDocument.averageOverall}</Text>
-                </Col>
-              )}
+              ) : selectedDocument.type === 'THPT' ? (
+                <>
+                  {selectedDocument.scores && Object.keys(selectedDocument.scores).length > 0 && (
+                    <Col span={24}>
+                      <Text strong>Điểm các môn thi THPT: </Text>
+                      <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, marginTop: 8 }}>
+                        {Object.entries(selectedDocument.scores).map(([subject, score]) => (
+                          <div key={subject} style={{ marginBottom: 4 }}>
+                            <Text strong>{subject}: </Text>
+                            <Text>{score as string}</Text>
+                          </div>
+                        ))}
+                      </div>
+                    </Col>
+                  )}
+                  {selectedDocument.examNumber && (
+                    <Col span={12}>
+                      <Text strong>Số báo danh: </Text>
+                      <Text>{selectedDocument.examNumber}</Text>
+                    </Col>
+                  )}
+                  {selectedDocument.examBan && (
+                    <Col span={12}>
+                      <Text strong>Ban thi: </Text>
+                      <Text>{(() => {
+                        const banMap: { [key: string]: string } = {
+                          'natural': 'Khoa học tự nhiên',
+                          'social': 'Khoa học xã hội',
+                          'general': 'Khối chung'
+                        };
+                        return banMap[selectedDocument.examBan] || selectedDocument.examBan;
+                      })()}</Text>
+                    </Col>
+                  )}
+                  {selectedDocument.files && Array.isArray(selectedDocument.files) && selectedDocument.files.length > 0 && (
+                    <Col span={24}>
+                      <Text strong>File điểm thi THPT: </Text>
+                      <Button 
+                        type="link" 
+                        icon={<EyeOutlined />} 
+                        onClick={() => handleViewFile(selectedDocument.files[0], `điểm_thi_THPT_${selectedDocument.student?.user?.fullName || 'exam'}`)}
+                      >
+                        Xem file điểm thi THPT
+                      </Button>
+                    </Col>
+                  )}
+                </>
+              ) : selectedDocument.type === 'TRANSCRIPT' ? (
+                <>
+                  {selectedDocument.averageOverall && (
+                    <Col span={12}>
+                      <Text strong>Điểm trung bình tổng: </Text>
+                      <Text>{selectedDocument.averageOverall}</Text>
+                    </Col>
+                  )}
+                  {selectedDocument.files && Array.isArray(selectedDocument.files) && selectedDocument.files.length > 0 && (
+                    <Col span={24}>
+                      <Text strong>File học bạ: </Text>
+                      <Button 
+                        type="link" 
+                        icon={<EyeOutlined />} 
+                        onClick={() => handleViewFile(selectedDocument.files[0], `học_bạ_${selectedDocument.student?.user?.fullName || 'transcript'}`)}
+                      >
+                        Xem file học bạ
+                      </Button>
+                    </Col>
+                  )}
+                </>
+              ) : null}
             </>
           )}
           

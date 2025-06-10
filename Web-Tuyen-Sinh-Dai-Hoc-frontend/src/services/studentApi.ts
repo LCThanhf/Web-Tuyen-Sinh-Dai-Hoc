@@ -150,6 +150,46 @@ export const studentApi = {
     return response.data;
   },
 
+  // Score file upload methods
+  uploadExamFile: async (file: File, scoreId?: string): Promise<{ fileUrl: string; score: Score }> => {
+    const formData = new FormData();
+    formData.append('examFile', file);
+    if (scoreId) formData.append('scoreId', scoreId);
+    
+    const response = await apiClient.post<ApiResponse<{ fileUrl: string; score: Score }>>('/student/scores/upload-exam-file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.data;
+  },
+
+  uploadTranscriptFile: async (file: File, scoreId?: string): Promise<{ fileUrl: string; score: Score }> => {
+    const formData = new FormData();
+    formData.append('transcriptFile', file);
+    if (scoreId) formData.append('scoreId', scoreId);
+    
+    const response = await apiClient.post<ApiResponse<{ fileUrl: string; score: Score }>>('/student/scores/upload-transcript-file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.data;
+  },
+
+  uploadAssessmentFile: async (file: File, scoreId?: string): Promise<{ fileUrl: string; score: Score }> => {
+    const formData = new FormData();
+    formData.append('assessmentFile', file);
+    if (scoreId) formData.append('scoreId', scoreId);
+    
+    const response = await apiClient.post<ApiResponse<{ fileUrl: string; score: Score }>>('/student/scores/upload-assessment-file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.data;
+  },
+
   // Priority
   getPriority: async (): Promise<Priority | null> => {
     const response = await apiClient.get<ApiResponse<Priority>>('/student/priority');

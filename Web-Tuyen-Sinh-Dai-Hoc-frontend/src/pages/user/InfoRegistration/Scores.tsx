@@ -60,7 +60,7 @@ interface ExamScoreEntry {
   examNumber: string;
   examBan: string;
   scores: { [key: string]: number | null };
-  examFile: any[];
+  examFile: (File | string)[]; // Support both File objects and URL strings
   status: keyof typeof statusTags;
 }
 
@@ -69,7 +69,7 @@ interface HkbScoreEntry {
   scores: { [subject: string]: number[] }; // Raw scores for 6 terms per subject
   subjectAverages: { [subject: string]: number }; // Calculated averages for 6 terms
   averageOverall: number; // Overall average of subject averages
-  hkbFile: any[];
+  hkbFile: (File | string)[]; // Support both File objects and URL strings
   status: keyof typeof statusTags;
 }
 
@@ -78,7 +78,7 @@ interface DgnlDgtdScoreEntry {
   type: "ĐGNL" | "ĐGTD" | null; // Allow null for "Không có điểm" case
   assessmentUnit: string | null; // Allow null for "Không có điểm" case
   assessmentScore: number | null; // Allow null for "Không có điểm" case
-  assessmentFile: any[];
+  assessmentFile: (File | string)[]; // Support both File objects and URL strings
   status: keyof typeof statusTags;
   noScoreDeclared: boolean; // New flag to indicate "no score" declaration
 }
@@ -94,6 +94,14 @@ const Scores: React.FC = () => {
   const [currentEditingExamKey, setCurrentEditingExamKey] = useState<string | null>(null);
   const [currentEditingHkbKey, setCurrentEditingHkbKey] = useState<string | null>(null);
   const [currentEditingDgnlDgtdKey, setCurrentEditingDgnlDgtdKey] = useState<string | null>(null);
+
+  // File upload states
+  const [selectedExamFile, setSelectedExamFile] = useState<File | null>(null);
+  const [selectedTranscriptFile, setSelectedTranscriptFile] = useState<File | null>(null);
+  const [selectedAssessmentFile, setSelectedAssessmentFile] = useState<File | null>(null);
+  const [uploadingExamFile, setUploadingExamFile] = useState<boolean>(false);
+  const [uploadingTranscriptFile, setUploadingTranscriptFile] = useState<boolean>(false);
+  const [uploadingAssessmentFile, setUploadingAssessmentFile] = useState<boolean>(false);
 
   // States to hold the unique submitted data for each tab
   const [examScoresTableData, setExamScoresTableData] = useState<ExamScoreEntry | null>(null);
@@ -130,12 +138,15 @@ const Scores: React.FC = () => {
     else if (!hasNatural && hasSocial) examBan = "social";
     else if (hasNatural && hasSocial) examBan = "natural"; // Default to natural if both
 
+    // Handle files from backend
+    const examFiles = latestScore.files && Array.isArray(latestScore.files) ? latestScore.files : [];
+
     return {
       key: latestScore.id || Date.now().toString(),
       examNumber: latestScore.examNumber || "Unknown",
       examBan: latestScore.examBan || examBan,
       scores: scoresData,
-      examFile: [], // Files would need separate handling
+      examFile: examFiles, // Include file URLs from backend
       status: latestScore.status === 'APPROVED' ? "Đã duyệt" : 
               latestScore.status === 'REJECTED' ? "Từ chối" : "Chờ duyệt"
     };
@@ -151,12 +162,15 @@ const Scores: React.FC = () => {
     const subjectAverages = latestScore.subjectAverages || {};
     const overallAverage = latestScore.averageOverall || 0;
 
+    // Handle files from backend
+    const hkbFiles = latestScore.files && Array.isArray(latestScore.files) ? latestScore.files : [];
+
     return {
       key: latestScore.id || "hkb_entry",
       scores: rawScores,
       subjectAverages: subjectAverages,
       averageOverall: overallAverage,
-      hkbFile: [], // Files would need separate handling
+      hkbFile: hkbFiles, // Include file URLs from backend
       status: latestScore.status === 'APPROVED' ? "Đã duyệt" : 
               latestScore.status === 'REJECTED' ? "Từ chối" : "Chờ duyệt"
     };
@@ -166,12 +180,15 @@ const Scores: React.FC = () => {
     const assessmentScores = scores.filter(score => score.type === 'ASSESSMENT');
     
     return assessmentScores.map(score => {
+      // Handle files from backend
+      const assessmentFiles = score.files && Array.isArray(score.files) ? score.files : [];
+
       return {
         key: score.id || Date.now().toString(),
         type: score.assessmentType as "ĐGNL" | "ĐGTD",
         assessmentUnit: score.assessmentUnit || "Unknown",
         assessmentScore: score.assessmentScore || 0,
-        assessmentFile: [], // Files would need separate handling
+        assessmentFile: assessmentFiles, // Include file URLs from backend
         status: score.status === 'APPROVED' ? "Đã duyệt" : 
                 score.status === 'REJECTED' ? "Từ chối" : "Chờ duyệt",
         noScoreDeclared: score.noScoreDeclared || false
@@ -285,6 +302,11 @@ const Scores: React.FC = () => {
   }));
 
   // --- THPT Exam Score Handlers ---
+  const handleExamFileSelect = (file: File) => {
+    setSelectedExamFile(file);
+    return false; // Prevent auto upload
+  };
+
   const onExamFinish = async (values: any) => {
     try {
       setSubmitting(true);
@@ -293,6 +315,22 @@ const Scores: React.FC = () => {
         relevantSubjects.push(...subjects.natural);
       } else if (values.examBan === "social") {
         relevantSubjects.push(...subjects.social);
+      }
+
+      // First upload file if selected
+      let uploadedScore = null;
+      if (selectedExamFile) {
+        setUploadingExamFile(true);
+        try {
+          const uploadResult = await studentApi.uploadExamFile(selectedExamFile);
+          uploadedScore = uploadResult.score;
+          message.success('Tải file minh chứng thành công!');
+        } catch (error) {
+          message.error('Không thể tải file lên. Vui lòng thử lại.');
+          return;
+        } finally {
+          setUploadingExamFile(false);
+        }
       }
 
       // Prepare scores object with all relevant subjects
@@ -304,14 +342,25 @@ const Scores: React.FC = () => {
         }
       });
 
-      // Save scores as a single record to backend
+      // Save scores to backend (update existing if file was uploaded)
       if (Object.keys(scoresObject).length > 0) {
-        await studentApi.saveScore({
-          type: 'THPT',
+        const scoreData = {
+          type: 'THPT' as const,
           examNumber: values.examNumber,
           examBan: values.examBan,
           scores: scoresObject
-        });
+        };
+
+        if (uploadedScore) {
+          // Update the existing score created by file upload
+          await studentApi.saveScore({
+            ...scoreData,
+            id: uploadedScore.id
+          });
+        } else {
+          // Create new score
+          await studentApi.saveScore(scoreData);
+        }
       }
 
       // Create local display entry
@@ -321,11 +370,11 @@ const Scores: React.FC = () => {
       });
 
       const newEntry: ExamScoreEntry = {
-        key: Date.now().toString(),
+        key: uploadedScore?.id || Date.now().toString(),
         examNumber: values.examNumber,
         examBan: values.examBan,
         scores: scores,
-        examFile: values.examFile ? values.examFile.map((file: any) => file.originFileObj) : [],
+        examFile: uploadedScore?.files ? uploadedScore.files : (selectedExamFile ? [selectedExamFile] : []),
         status: "Chờ duyệt",
       };
 
@@ -334,6 +383,7 @@ const Scores: React.FC = () => {
       examForm.resetFields();
       setSelectedExamBan(null);
       setCurrentEditingExamKey(null);
+      setSelectedExamFile(null);
     } catch (error) {
       console.error('Failed to save exam scores:', error);
       message.error('Không thể lưu điểm thi THPT. Vui lòng thử lại.');
@@ -345,17 +395,40 @@ const Scores: React.FC = () => {
   const handleEditExamScore = () => {
     if (examScoresTableData) {
       // Set form fields with existing data for editing
-      examForm.setFieldsValue({
+      const formValues: any = {
         examNumber: examScoresTableData.examNumber,
         examBan: examScoresTableData.examBan,
         ...Object.keys(examScoresTableData.scores).reduce((acc: any, subj) => {
           acc[`score${subj}`] = examScoresTableData.scores[subj];
           return acc;
         }, {}),
-        // For file upload, you might need to handle Antd's fileList structure
-        // This is a simplified representation, a real app might need file URLs
-        examFile: examScoresTableData.examFile.length > 0 ? [{ uid: '-1', name: 'uploaded_file', status: 'done', url: URL.createObjectURL(examScoresTableData.examFile[0]) }] : [],
-      });
+      };
+
+      // Handle file field for editing - convert to Antd fileList format if there are files
+      if (examScoresTableData.examFile.length > 0) {
+        const file = examScoresTableData.examFile[0];
+        if (typeof file === 'string') {
+          // Backend file URL - create a fileList item pointing to the server file
+          formValues.examFile = [{ 
+            uid: '-1', 
+            name: 'uploaded_file', 
+            status: 'done', 
+            url: `http://localhost:3000/api/student/files${file}` 
+          }];
+        } else {
+          // Local File object
+          formValues.examFile = [{ 
+            uid: '-1', 
+            name: file.name, 
+            status: 'done', 
+            url: URL.createObjectURL(file) 
+          }];
+        }
+      } else {
+        formValues.examFile = [];
+      }
+
+      examForm.setFieldsValue(formValues);
       setSelectedExamBan(examScoresTableData.examBan);
       setCurrentEditingExamKey(examScoresTableData.key);
       message.info("Bạn đang chỉnh sửa điểm thi THPT.");
@@ -366,19 +439,25 @@ const Scores: React.FC = () => {
     try {
       setSubmitting(true);
       
-      // Note: In a real implementation, you'd need to track score IDs from backend
-      // For now, we'll clear local data and could implement API call when IDs are available
+      // Delete score from backend if we have the score key (which should be the score ID)
+      if (examScoresTableData && examScoresTableData.key) {
+        try {
+          await studentApi.deleteScore(examScoresTableData.key);
+          message.success("Xóa điểm thi THPT từ server thành công!");
+        } catch (error) {
+          console.error('Failed to delete score from backend:', error);
+          message.warning("Xóa điểm thi THPT từ giao diện thành công, nhưng có lỗi khi xóa từ server.");
+        }
+      }
       
-      // TODO: Delete individual scores from backend when score IDs are properly tracked
-      // if (examScoresTableData && examScoresTableData.scoreIds) {
-      //   await Promise.all(examScoresTableData.scoreIds.map(id => studentApi.deleteScore(id)));
-      // }
-      
-      setExamScoresTableData(null); // Remove the single entry
-      message.success("Xóa điểm thi THPT thành công!");
+      setExamScoresTableData(null); // Remove the single entry from UI
       examForm.resetFields();
       setSelectedExamBan(null);
       setCurrentEditingExamKey(null);
+      setSelectedExamFile(null);
+      
+      // Reload data from backend to ensure consistency
+      await loadScoresFromBackend();
     } catch (error) {
       console.error('Failed to delete exam scores:', error);
       message.error('Không thể xóa điểm thi THPT. Vui lòng thử lại.');
@@ -421,14 +500,27 @@ const Scores: React.FC = () => {
       title: "Minh chứng",
       dataIndex: "examFile",
       key: "examFile",
-      render: (files: any[]) =>
-        files.length > 0 ? (
-          <a href={URL.createObjectURL(files[0])} target="_blank" rel="noopener noreferrer">
-            Xem file
-          </a>
-        ) : (
-          "Không có"
-        ),
+      render: (files: (File | string)[]) => {
+        if (files.length > 0) {
+          const file = files[0];
+          if (typeof file === 'string') {
+            // Backend file URL
+            return (
+              <a href={`http://localhost:3000/api/student/files${file}`} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          } else {
+            // Local File object
+            return (
+              <a href={URL.createObjectURL(file)} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          }
+        }
+        return "Không có";
+      },
     },
     {
       title: "Trạng thái",
@@ -470,12 +562,32 @@ const Scores: React.FC = () => {
   ];
 
   // --- HKB Score Handlers ---
+  const handleTranscriptFileSelect = (file: File) => {
+    setSelectedTranscriptFile(file);
+    return false; // Prevent auto upload
+  };
+
   const onHkbFinish = async () => {
     try {
       await hkbForm.validateFields();
       setSubmitting(true);
 
-      const values = hkbForm.getFieldsValue();
+      // First upload file if selected
+      let uploadedScore = null;
+      if (selectedTranscriptFile) {
+        setUploadingTranscriptFile(true);
+        try {
+          const uploadResult = await studentApi.uploadTranscriptFile(selectedTranscriptFile);
+          uploadedScore = uploadResult.score;
+          message.success('Tải file minh chứng thành công!');
+        } catch (error) {
+          message.error('Không thể tải file lên. Vui lòng thử lại.');
+          return;
+        } finally {
+          setUploadingTranscriptFile(false);
+        }
+      }
+
       const subjectAverages: { [subject: string]: number } = {};
       
       // Calculate subject averages for all subjects
@@ -485,20 +597,31 @@ const Scores: React.FC = () => {
       });
 
       // Save to backend as a single TRANSCRIPT record
-      await studentApi.saveScore({
-        type: 'TRANSCRIPT',
+      const scoreData = {
+        type: 'TRANSCRIPT' as const,
         scores: hkbRawScoresData,
         subjectAverages: subjectAverages,
         averageOverall: parseFloat(averageOverallHkbScore().toFixed(2))
-      });
+      };
+
+      if (uploadedScore) {
+        // Update the existing score created by file upload
+        await studentApi.saveScore({
+          ...scoreData,
+          id: uploadedScore.id
+        });
+      } else {
+        // Create new score
+        await studentApi.saveScore(scoreData);
+      }
 
       // Create local display entry
       const newEntry: HkbScoreEntry = {
-        key: Date.now().toString(),
+        key: uploadedScore?.id || Date.now().toString(),
         scores: { ...hkbRawScoresData }, // Raw scores for backup/admin view
         subjectAverages: subjectAverages, // Calculated averages
         averageOverall: parseFloat(averageOverallHkbScore().toFixed(2)),
-        hkbFile: values.hkbFile ? values.hkbFile.map((file: any) => file.originFileObj) : [],
+        hkbFile: uploadedScore?.files ? uploadedScore.files : (selectedTranscriptFile ? [selectedTranscriptFile] : []),
         status: "Chờ duyệt",
       };
       
@@ -515,6 +638,7 @@ const Scores: React.FC = () => {
         return init;
       });
       setCurrentEditingHkbKey(null);
+      setSelectedTranscriptFile(null);
     } catch (error) {
       console.error('Failed to save HKB scores:', error);
       message.error("Không thể lưu điểm học bạ. Vui lòng thử lại.");
@@ -527,10 +651,33 @@ const Scores: React.FC = () => {
     if (hkbScoresTableData) {
       // Set raw scores data back to the input table
       setHkbRawScoresData({ ...hkbScoresTableData.scores });
-      // Set file in the form (simplified)
-      hkbForm.setFieldsValue({
-        hkbFile: hkbScoresTableData.hkbFile.length > 0 ? [{ uid: '-1', name: 'uploaded_file', status: 'done', url: URL.createObjectURL(hkbScoresTableData.hkbFile[0]) }] : [],
-      });
+      
+      // Handle file field for editing
+      const formValues: any = {};
+      if (hkbScoresTableData.hkbFile.length > 0) {
+        const file = hkbScoresTableData.hkbFile[0];
+        if (typeof file === 'string') {
+          // Backend file URL
+          formValues.hkbFile = [{ 
+            uid: '-1', 
+            name: 'uploaded_file', 
+            status: 'done', 
+            url: `http://localhost:3000/api/student/files${file}` 
+          }];
+        } else {
+          // Local File object
+          formValues.hkbFile = [{ 
+            uid: '-1', 
+            name: file.name, 
+            status: 'done', 
+            url: URL.createObjectURL(file) 
+          }];
+        }
+      } else {
+        formValues.hkbFile = [];
+      }
+
+      hkbForm.setFieldsValue(formValues);
       setCurrentEditingHkbKey(hkbScoresTableData.key);
       message.info("Bạn đang chỉnh sửa điểm học bạ.");
     }
@@ -540,16 +687,18 @@ const Scores: React.FC = () => {
     try {
       setSubmitting(true);
       
-      // Note: In a real implementation, you'd need to track score IDs from backend
-      // For now, we'll clear local data and could implement API call when IDs are available
-      
-      // TODO: Delete individual scores from backend when score IDs are properly tracked
-      // if (hkbScoresTableData && hkbScoresTableData.scoreIds) {
-      //   await Promise.all(hkbScoresTableData.scoreIds.map(id => studentApi.deleteScore(id)));
-      // }
+      // Delete score from backend if we have the score key (which should be the score ID)
+      if (hkbScoresTableData && hkbScoresTableData.key) {
+        try {
+          await studentApi.deleteScore(hkbScoresTableData.key);
+          message.success("Xóa điểm học bạ từ server thành công!");
+        } catch (error) {
+          console.error('Failed to delete HKB score from backend:', error);
+          message.warning("Xóa điểm học bạ từ giao diện thành công, nhưng có lỗi khi xóa từ server.");
+        }
+      }
       
       setHkbScoresTableData(null);
-      message.success("Xóa điểm học bạ thành công!");
       hkbForm.resetFields();
       setHkbRawScoresData(() => { // Reset raw scores as well
         const init: { [key: string]: number[] } = {};
@@ -559,6 +708,10 @@ const Scores: React.FC = () => {
         return init;
       });
       setCurrentEditingHkbKey(null);
+      setSelectedTranscriptFile(null);
+      
+      // Reload data from backend to ensure consistency
+      await loadScoresFromBackend();
     } catch (error) {
       console.error('Failed to delete HKB scores:', error);
       message.error('Không thể xóa điểm học bạ. Vui lòng thử lại.');
@@ -578,14 +731,27 @@ const Scores: React.FC = () => {
       title: "Minh chứng",
       dataIndex: "hkbFile",
       key: "hkbFile",
-      render: (files: any[]) =>
-        files.length > 0 ? (
-          <a href={URL.createObjectURL(files[0])} target="_blank" rel="noopener noreferrer">
-            Xem file
-          </a>
-        ) : (
-          "Không có"
-        ),
+      render: (files: (File | string)[]) => {
+        if (files.length > 0) {
+          const file = files[0];
+          if (typeof file === 'string') {
+            // Backend file URL
+            return (
+              <a href={`http://localhost:3000/api/student/files${file}`} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          } else {
+            // Local File object
+            return (
+              <a href={URL.createObjectURL(file)} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          }
+        }
+        return "Không có";
+      },
     },
     {
       title: "Trạng thái",
@@ -662,10 +828,16 @@ const Scores: React.FC = () => {
     return allUnits.filter(unit => !usedUnits.includes(unit.value));
   };
 
+  // --- ĐGNL/ĐGTD Score Handlers ---
+  const handleAssessmentFileSelect = (file: File) => {
+    setSelectedAssessmentFile(file);
+    return false; // Prevent auto upload
+  };
+
   const onDgnlDgtdFinish = async (values: any) => {
     try {
       setSubmitting(true);
-      const { assessmentType, assessmentUnit, assessmentScore, assessmentFile, noScoreDeclared } = values;
+      const { assessmentType, assessmentUnit, assessmentScore, noScoreDeclared } = values;
 
       if (noScoreDeclared) {
         // If "no score" is declared, save a special entry
@@ -706,23 +878,48 @@ const Scores: React.FC = () => {
           }
         }
 
+        // First upload file if selected
+        let uploadedScore = null;
+        if (selectedAssessmentFile) {
+          setUploadingAssessmentFile(true);
+          try {
+            const uploadResult = await studentApi.uploadAssessmentFile(selectedAssessmentFile);
+            uploadedScore = uploadResult.score;
+            message.success('Tải file minh chứng thành công!');
+          } catch (error) {
+            message.error('Không thể tải file lên. Vui lòng thử lại.');
+            return;
+          } finally {
+            setUploadingAssessmentFile(false);
+          }
+        }
+
         // Save to backend
-        await studentApi.saveScore({
-          type: 'ASSESSMENT',
+        const scoreData = {
+          type: 'ASSESSMENT' as const,
           assessmentType: assessmentType,
           assessmentUnit: assessmentUnit,
           assessmentScore: assessmentScore,
           scores: {} // Empty scores object for assessment type
-        });
+        };
+
+        if (uploadedScore) {
+          // Update the existing score created by file upload
+          await studentApi.saveScore({
+            ...scoreData,
+            id: uploadedScore.id
+          });
+        } else {
+          // Create new score
+          await studentApi.saveScore(scoreData);
+        }
 
         const newEntry: DgnlDgtdScoreEntry = {
-          key: currentEditingDgnlDgtdKey || Date.now().toString(),
+          key: uploadedScore?.id || currentEditingDgnlDgtdKey || Date.now().toString(),
           type: assessmentType,
           assessmentUnit: assessmentUnit,
           assessmentScore: assessmentScore,
-          assessmentFile: assessmentFile
-            ? assessmentFile.map((file: any) => file.originFileObj)
-            : [],
+          assessmentFile: uploadedScore?.files ? uploadedScore.files : (selectedAssessmentFile ? [selectedAssessmentFile] : []),
           status: "Chờ duyệt",
           noScoreDeclared: false,
         };
@@ -744,6 +941,7 @@ const Scores: React.FC = () => {
       setSelectedAssessmentType(null);
       setCurrentEditingDgnlDgtdKey(null);
       setNoDgnlDgtdScore(false); // Reset checkbox
+      setSelectedAssessmentFile(null);
     } catch (error) {
       console.error('Failed to save DGNL/DGTD scores:', error);
       message.error('Không thể lưu điểm ĐGNL/ĐGTD. Vui lòng thử lại.');
@@ -753,27 +951,50 @@ const Scores: React.FC = () => {
   };
 
   const handleEditDgnlDgtdScore = (record: DgnlDgtdScoreEntry) => {
+    const formValues: any = {};
+    
     if (record.noScoreDeclared) {
       // If editing a "no score" entry
       setNoDgnlDgtdScore(true);
-      dgnlDgtdForm.setFieldsValue({
-        noScoreDeclared: true,
-        assessmentType: null,
-        assessmentUnit: null,
-        assessmentScore: null,
-        assessmentFile: [],
-      });
+      formValues.noScoreDeclared = true;
+      formValues.assessmentType = null;
+      formValues.assessmentUnit = null;
+      formValues.assessmentScore = null;
+      formValues.assessmentFile = [];
     } else {
       // If editing a normal score entry
       setNoDgnlDgtdScore(false);
-      dgnlDgtdForm.setFieldsValue({
-        noScoreDeclared: false,
-        assessmentType: record.type,
-        assessmentUnit: record.assessmentUnit,
-        assessmentScore: record.assessmentScore,
-        assessmentFile: record.assessmentFile.length > 0 ? [{ uid: '-1', name: 'uploaded_file', status: 'done', url: URL.createObjectURL(record.assessmentFile[0]) }] : [],
-      });
+      formValues.noScoreDeclared = false;
+      formValues.assessmentType = record.type;
+      formValues.assessmentUnit = record.assessmentUnit;
+      formValues.assessmentScore = record.assessmentScore;
+      
+      // Handle file field
+      if (record.assessmentFile.length > 0) {
+        const file = record.assessmentFile[0];
+        if (typeof file === 'string') {
+          // Backend file URL
+          formValues.assessmentFile = [{ 
+            uid: '-1', 
+            name: 'uploaded_file', 
+            status: 'done', 
+            url: `http://localhost:3000/api/student/files${file}` 
+          }];
+        } else {
+          // Local File object
+          formValues.assessmentFile = [{ 
+            uid: '-1', 
+            name: file.name, 
+            status: 'done', 
+            url: URL.createObjectURL(file) 
+          }];
+        }
+      } else {
+        formValues.assessmentFile = [];
+      }
     }
+    
+    dgnlDgtdForm.setFieldsValue(formValues);
     setSelectedAssessmentType(record.type);
     setCurrentEditingDgnlDgtdKey(record.key);
     message.info("Bạn đang chỉnh sửa thông tin ĐGNL/ĐGTD.");
@@ -783,16 +1004,18 @@ const Scores: React.FC = () => {
     try {
       setSubmitting(true);
       
-      // Note: In a real implementation, you'd need to track score IDs from backend
-      // For now, we'll clear local data and could implement API call when IDs are available
-      
-      // TODO: Delete score from backend when score IDs are properly tracked
-      // if (record.scoreId) {
-      //   await studentApi.deleteScore(record.scoreId);
-      // }
+      // Delete score from backend if we have the score key (which should be the score ID)
+      if (record.key && record.key !== "hkb_entry") { // Skip deletion for dummy keys
+        try {
+          await studentApi.deleteScore(record.key);
+          message.success("Xóa thông tin ĐGNL/ĐGTD từ server thành công!");
+        } catch (error) {
+          console.error('Failed to delete DGNL/DGTD score from backend:', error);
+          message.warning("Xóa thông tin ĐGNL/ĐGTD từ giao diện thành công, nhưng có lỗi khi xóa từ server.");
+        }
+      }
       
       setDgnlDgtdScoresTableData(prev => prev.filter(entry => entry.key !== record.key));
-      message.success("Xóa thông tin ĐGNL/ĐGTD thành công!");
 
       // If we're currently editing this entry, reset the form
       if (currentEditingDgnlDgtdKey === record.key) {
@@ -800,7 +1023,11 @@ const Scores: React.FC = () => {
         setSelectedAssessmentType(null);
         setCurrentEditingDgnlDgtdKey(null);
         setNoDgnlDgtdScore(false);
+        setSelectedAssessmentFile(null);
       }
+      
+      // Reload data from backend to ensure consistency
+      await loadScoresFromBackend();
     } catch (error) {
       console.error('Failed to delete DGNL/DGTD score:', error);
       message.error('Không thể xóa điểm ĐGNL/ĐGTD. Vui lòng thử lại.');
@@ -843,15 +1070,28 @@ const Scores: React.FC = () => {
       title: "Minh chứng",
       dataIndex: "assessmentFile",
       key: "assessmentFile",
-      render: (files: any[], record: DgnlDgtdScoreEntry) => {
+      render: (files: (File | string)[], record: DgnlDgtdScoreEntry) => {
         if (record.noScoreDeclared) return "Không có";
-        return files.length > 0 ? (
-          <a href={URL.createObjectURL(files[0])} target="_blank" rel="noopener noreferrer">
-            Xem file
-          </a>
-        ) : (
-          "Không có"
-        );
+        
+        if (files.length > 0) {
+          const file = files[0];
+          if (typeof file === 'string') {
+            // Backend file URL
+            return (
+              <a href={`http://localhost:3000/api/student/files${file}`} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          } else {
+            // Local File object
+            return (
+              <a href={URL.createObjectURL(file)} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            );
+          }
+        }
+        return "Không có";
       },
     },
     {
@@ -1004,13 +1244,44 @@ const Scores: React.FC = () => {
           <Form.Item
             label="File minh chứng điểm thi"
             name="examFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e: any) => e && e.fileList}
-            rules={[{ required: true, message: "Vui lòng upload file minh chứng" }]}
+            rules={[
+              {
+                validator: () => {
+                  // Check if either a new file is selected OR an existing file is already uploaded OR we're editing
+                  if (selectedExamFile || (examScoresTableData?.examFile && examScoresTableData.examFile.length > 0) || currentEditingExamKey) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error("Vui lòng upload file minh chứng"));
+                }
+              }
+            ]}
           >
-            <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png">
-              <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+            <Upload
+              beforeUpload={handleExamFileSelect}
+              maxCount={1}
+              accept=".pdf,.jpg,.png,.jpeg"
+              fileList={[]}
+              showUploadList={false}
+            >
+              <Button 
+                icon={<UploadOutlined />}
+                loading={uploadingExamFile}
+              >
+                Chọn file minh chứng
+              </Button>
             </Upload>
+            {selectedExamFile && (
+              <div style={{ marginTop: 8 }}>
+                <span>File đã chọn: {selectedExamFile.name}</span>
+                <Button 
+                  size="small" 
+                  style={{ marginLeft: 8 }}
+                  onClick={() => setSelectedExamFile(null)}
+                >
+                  Hủy
+                </Button>
+              </div>
+            )}
           </Form.Item>
 
           <Form.Item>
@@ -1068,14 +1339,45 @@ const Scores: React.FC = () => {
           <Form.Item
             label="File minh chứng học bạ"
             name="hkbFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e: any) => e && e.fileList}
-            rules={[{ required: true, message: "Vui lòng upload file minh chứng" }]}
+            rules={[
+              {
+                validator: () => {
+                  // Check if either a new file is selected OR an existing file is already uploaded OR we're editing
+                  if (selectedTranscriptFile || (hkbScoresTableData?.hkbFile && hkbScoresTableData.hkbFile.length > 0) || currentEditingHkbKey) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error("Vui lòng upload file minh chứng"));
+                }
+              }
+            ]}
             style={{ marginTop: '16px' }}
           >
-            <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png">
-              <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+            <Upload
+              beforeUpload={handleTranscriptFileSelect}
+              maxCount={1}
+              accept=".pdf,.jpg,.png,.jpeg"
+              fileList={[]}
+              showUploadList={false}
+            >
+              <Button 
+                icon={<UploadOutlined />}
+                loading={uploadingTranscriptFile}
+              >
+                Chọn file minh chứng
+              </Button>
             </Upload>
+            {selectedTranscriptFile && (
+              <div style={{ marginTop: 8 }}>
+                <span>File đã chọn: {selectedTranscriptFile.name}</span>
+                <Button 
+                  size="small" 
+                  style={{ marginLeft: 8 }}
+                  onClick={() => setSelectedTranscriptFile(null)}
+                >
+                  Hủy
+                </Button>
+              </div>
+            )}
           </Form.Item>
 
           <Form.Item>
@@ -1254,13 +1556,43 @@ const Scores: React.FC = () => {
               <Form.Item
                 label="File minh chứng điểm thi"
                 name="assessmentFile"
-                valuePropName="fileList"
-                getValueFromEvent={(e: any) => e && e.fileList}
-                rules={[{ required: true, message: "Vui lòng upload file minh chứng" }]}
+                rules={[
+                  {
+                    validator: () => {
+                      if (selectedAssessmentFile || noDgnlDgtdScore) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error("Vui lòng upload file minh chứng"));
+                    }
+                  }
+                ]}
               >
-                <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.jpg,.png">
-                  <Button icon={<UploadOutlined />}>Chọn file minh chứng</Button>
+                <Upload
+                  beforeUpload={handleAssessmentFileSelect}
+                  maxCount={1}
+                  accept=".pdf,.jpg,.png,.jpeg"
+                  fileList={[]}
+                  showUploadList={false}
+                >
+                  <Button 
+                    icon={<UploadOutlined />}
+                    loading={uploadingAssessmentFile}
+                  >
+                    Chọn file minh chứng
+                  </Button>
                 </Upload>
+                {selectedAssessmentFile && (
+                  <div style={{ marginTop: 8 }}>
+                    <span>File đã chọn: {selectedAssessmentFile.name}</span>
+                    <Button 
+                      size="small" 
+                      style={{ marginLeft: 8 }}
+                      onClick={() => setSelectedAssessmentFile(null)}
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                )}
               </Form.Item>
             </>
           )}
