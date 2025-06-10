@@ -1,0 +1,67 @@
+import { Router } from 'express';
+import { StudentController } from '../controllers/studentController';
+import { ApplicationController } from '../controllers/applicationController';
+import { authenticateToken, requireStudent } from '../middleware/auth';
+import { uploadSingle } from '../middleware/upload';
+import { 
+  validatePersonalInfo, 
+  validateScore, 
+  validatePriority
+} from '../middleware/validation';
+
+const router = Router();
+
+// All student routes require authentication and student role
+router.use(authenticateToken);
+router.use(requireStudent);
+
+// Personal Information routes
+router.get('/personal-info', StudentController.getPersonalInfo);
+router.put('/personal-info', validatePersonalInfo, StudentController.updatePersonalInfo);
+router.post('/personal-info/upload-cccd-front', uploadSingle('cccdFrontFile'), StudentController.uploadCccdFrontFile);
+router.post('/personal-info/upload-cccd-back', uploadSingle('cccdBackFile'), StudentController.uploadCccdBackFile);
+
+// Scores routes
+router.get('/scores', StudentController.getScores);
+router.post('/scores', validateScore, StudentController.upsertScore);
+router.post('/scores/upload-exam', uploadSingle('examFile'), StudentController.uploadScoreFile);
+router.post('/scores/upload-transcript', uploadSingle('transcriptFile'), StudentController.uploadScoreFile);
+router.post('/scores/upload-assessment', uploadSingle('assessmentFile'), StudentController.uploadScoreFile);
+router.post('/scores/upload-exam', uploadSingle('examFile'), StudentController.uploadScoreFile);
+router.post('/scores/upload-transcript', uploadSingle('transcriptFile'), StudentController.uploadScoreFile);
+router.post('/scores/upload-assessment', uploadSingle('assessmentFile'), StudentController.uploadScoreFile);
+
+// Priority routes
+router.get('/priority', StudentController.getPriority);
+router.put('/priority', validatePriority, StudentController.updatePriority);
+router.post('/priority/upload', uploadSingle('priorityFile'), StudentController.uploadPriorityFile);
+
+
+// Achievement routes
+router.get('/achievement', StudentController.getAchievement);
+router.put('/achievement', StudentController.updateAchievement);
+router.post('/achievement/upload', uploadSingle('achievementFile'), StudentController.uploadAchievementFile);
+
+// Certificate routes
+router.get('/certificate', StudentController.getCertificate);
+router.put('/certificate', StudentController.updateCertificate);
+router.post('/certificate/upload', uploadSingle('certificateFile'), StudentController.uploadCertificateFile);
+
+// Application routes
+router.get('/applications', ApplicationController.getApplications);
+router.post('/applications', ApplicationController.submitApplication);
+router.get('/applications/:id/status', ApplicationController.getApplicationStatus);
+router.put('/applications/:id/priority', ApplicationController.updateApplicationPriority);
+router.delete('/applications/:id', ApplicationController.deleteApplication);
+
+// File serving route
+router.get('/files/*', StudentController.serveFile);
+
+// Delete routes for documents
+router.delete('/scores/:id', StudentController.deleteScore);
+router.delete('/personal-info', StudentController.deletePersonalInfo);
+router.delete('/priority', StudentController.deletePriority);
+router.delete('/achievement', StudentController.deleteAchievement);
+router.delete('/certificate', StudentController.deleteCertificate);
+
+export default router;
