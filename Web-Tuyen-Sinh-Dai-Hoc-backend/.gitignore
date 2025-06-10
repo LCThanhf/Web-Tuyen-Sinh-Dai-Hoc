@@ -149,8 +149,6 @@ build/
 ehthumbs.db
 Thumbs.db
 
-# Project specific files
-# File uploads directory (keep structure but not files)
 uploads/*
 !uploads/.gitkeep
 !uploads/*/
