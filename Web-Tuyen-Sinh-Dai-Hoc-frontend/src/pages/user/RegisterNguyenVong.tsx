@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import {
   Form,
@@ -10,7 +9,7 @@ import {
   message,
   Spin,
 } from "antd";
-import { applicationApi, type School, type Major, type AdmissionMethod } from "../../services/applicationApi";
+import { applicationApi, type School, type Major } from "../../services/applicationApi";
 
 const { Option } = Select;
 const { Title } = Typography;
@@ -22,7 +21,6 @@ const RegisterNguyenVongForm = () => {
   
   // State for data
   const [schools, setSchools] = useState<School[]>([]);
-  const [admissionMethods, setAdmissionMethods] = useState<AdmissionMethod[]>([]);
   const [majors, setMajors] = useState<Major[]>([]);
   
   // State for selections
@@ -30,24 +28,20 @@ const RegisterNguyenVongForm = () => {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
 
+  // Define the 3 admission methods directly
+  const admissionMethods = [
+    { id: 'thpt', name: 'Điểm THPT' },
+    { id: 'hocba', name: 'Học bạ' },
+    { id: 'dgnl-dgtd', name: 'Đánh giá năng lực/Đánh giá tư duy' }
+  ];
+
   // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
       try {
-        const [schoolsData] = await Promise.all([
-          applicationApi.getSchools(),
-        ]);
-        
+        const schoolsData = await applicationApi.getSchools();
         setSchools(schoolsData);
-        
-        // Extract unique admission methods from all schools
-        const allMethods = schoolsData.flatMap(school => school.admissionMethods);
-        const uniqueMethods = allMethods.filter((method, index, self) => 
-          index === self.findIndex(m => m.id === method.id)
-        );
-        setAdmissionMethods(uniqueMethods);
-        
       } catch (error) {
         console.error('Error loading data:', error);
         message.error('Không thể tải dữ liệu. Vui lòng thử lại!');
@@ -150,8 +144,13 @@ const RegisterNguyenVongForm = () => {
   // Filter schools based on selected admission method
   const getFilteredSchools = () => {
     if (!selectedMethod) return [];
+    
+    // Map our method IDs to the method names that schools might have
+    const methodName = admissionMethods.find(m => m.id === selectedMethod)?.name;
+    if (!methodName) return [];
+    
     return schools.filter(school => 
-      school.admissionMethods.some(method => method.id === selectedMethod)
+      school.admissionMethods.some(method => method.name === methodName)
     );
   };
 
@@ -250,20 +249,19 @@ const RegisterNguyenVongForm = () => {
               rules={[
                 {
                   required: selectedMethod ? 
-                    ['Điểm THPT', 'Học bạ'].includes(admissionMethods.find(m => m.id === selectedMethod)?.name || '') : false,
+                    ['thpt', 'hocba'].includes(selectedMethod) : false,
                   message: "Vui lòng chọn tổ hợp xét tuyển"
                 }
               ]}
             >
               <Select 
                 placeholder={
-                  selectedMethod && admissionMethods.find(m => m.id === selectedMethod)?.name === 'Đánh giá năng lực/Đánh giá tư duy' 
+                  selectedMethod === 'dgnl-dgtd'
                     ? "Không áp dụng cho phương thức này"
                     : "Chọn tổ hợp xét tuyển"
                 }
                 disabled={
-                  !selectedMajor || 
-                  (selectedMethod ? admissionMethods.find(m => m.id === selectedMethod)?.name === 'Đánh giá năng lực/Đánh giá tư duy' : false)
+                  !selectedMajor || selectedMethod === 'dgnl-dgtd'
                 }
                 allowClear
               >

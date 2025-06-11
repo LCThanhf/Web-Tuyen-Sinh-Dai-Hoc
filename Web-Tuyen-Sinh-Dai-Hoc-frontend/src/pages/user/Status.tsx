@@ -217,7 +217,38 @@ const Status: React.FC = () => {
     setTempPriorityMap(prev => ({ ...prev, [applicationId]: priority }));
   };
 
-  const handleSaveReorder = async () => {
+    const handleSaveReorder = async () => {
+    // Check for duplicate priorities
+    const priorities = Object.values(tempPriorityMap);
+    const originalPriorities = data.map(item => item.stt);
+    
+    // Merge original priorities with temp changes
+    const finalPriorities = data.map(item => {
+      const tempPriority = tempPriorityMap[item.id];
+      return tempPriority !== undefined ? tempPriority : item.stt;
+    });
+    
+    // Check for duplicates
+    const uniquePriorities = new Set(finalPriorities);
+    if (uniquePriorities.size !== finalPriorities.length) {
+      message.error('Không được phép có thứ tự trùng lặp. Đã hoàn tác các thay đổi!');
+      // Automatically revert changes
+      setTempPriorityMap({});
+      setIsReordering(false);
+      return;
+    }
+    
+    // Check if all priorities are within valid range
+    const minPriority = Math.min(...finalPriorities);
+    const maxPriority = Math.max(...finalPriorities);
+    if (minPriority < 1 || maxPriority > data.length) {
+      message.error(`Thứ tự phải từ 1 đến ${data.length}. Đã hoàn tác các thay đổi!`);
+      // Automatically revert changes
+      setTempPriorityMap({});
+      setIsReordering(false);
+      return;
+    }
+    
     setSubmitting(true);
     try {
       for (const [applicationId, priority] of Object.entries(tempPriorityMap)) {
@@ -229,6 +260,9 @@ const Status: React.FC = () => {
       message.success('Đã lưu thứ tự nguyện vọng mới!');
     } catch (error: any) {
       message.error(error.message || 'Có lỗi xảy ra khi cập nhật thứ tự');
+      // Revert changes on API error
+      setTempPriorityMap({});
+      setIsReordering(false);
     } finally {
       setSubmitting(false);
     }

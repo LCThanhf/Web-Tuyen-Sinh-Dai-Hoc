@@ -174,16 +174,30 @@ const VirtualFilterPage: React.FC = () => {
   ];
 
   // Lấy danh sách thí sinh trúng tuyển của ngành trường được chọn
-  const admittedApplicants = results.filter(r => 
-    r.schoolId === selectedSchoolId && 
-    r.majorId === selectedMajorId &&
-    r.admissionStatus === 'ADMITTED'
-  );
+  const admittedApplicants = results
+    .filter(r => r.schoolId === selectedSchoolId && r.majorId === selectedMajorId)
+    .sort((a, b) => a.priorityOrder - b.priorityOrder) // Sắp xếp theo thứ tự nguyện vọng từ cao xuống thấp
+    .map((r, index, arr) => {
+      if (index === 0) {
+        return { ...r, admissionStatus: 'ADMITTED' };
+      }
+      // Nếu thí sinh đã trúng tuyển nguyện vọng trước đó, giữ nguyên trạng thái "ADMITTED"
+      if (arr[index - 1].admissionStatus === 'ADMITTED') {
+        return { ...r, admissionStatus: 'ADMITTED' };
+      }
+      // Nếu không trúng tuyển, đánh dấu là "REJECTED"
+      return { ...r, admissionStatus: 'REJECTED' };
+    });
 
   // Tính điểm chuẩn (điểm thấp nhất trong danh sách trúng tuyển)
   const admissionScore = admittedApplicants.length > 0
     ? Math.min(...admittedApplicants.map(app => app.totalScore))
     : null;
+
+  // Xử lý trạng thái kết quả tổng thể
+  const admissionStatusOverall = admittedApplicants.length > 0
+    ? `Trúng tuyển các NV từ ${admittedApplicants[0].priorityOrder} đến ${admittedApplicants[admittedApplicants.length - 1].priorityOrder}`
+    : 'Không trúng tuyển';
 
   return (
     <div style={{ padding: 20 }}>
@@ -254,12 +268,20 @@ const VirtualFilterPage: React.FC = () => {
           </Col>
         </Row>
 
+        {/* Hiển thị trạng thái tổng thể */}
+        <Row gutter={16} style={{ marginBottom: 20 }}>
+          <Col span={24}>
+            <Card>
+              <Text>Trạng thái kết quả tổng thể</Text>
+              <Title level={3}>{admissionStatusOverall}</Title>
+            </Card>
+          </Col>
+        </Row>
+
         <Spin spinning={loading} tip="Đang chạy lọc ảo...">
           <Table
             columns={columns}
-            dataSource={results.filter(r => 
-              r.schoolId === selectedSchoolId && r.majorId === selectedMajorId
-            )}
+            dataSource={admittedApplicants} // Sử dụng admittedApplicants thay vì all results
             rowKey={(record) => record.studentId + '_' + record.majorId}
             pagination={{ pageSize: 10 }}
           />

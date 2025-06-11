@@ -479,3 +479,6 @@ const ManageSchoolsPage: React.FC = () => {
 };
 
 export default ManageSchoolsPage;
+
+
+
